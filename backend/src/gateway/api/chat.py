@@ -107,6 +107,18 @@ def _routing_error(error: RoutingError) -> GatewayAPIError:
             message="No eligible provider satisfies the configured latency ceiling.",
             status_code=422,
         )
+    if error.category is RoutingErrorCategory.QUALITY_UNAVAILABLE:
+        return GatewayAPIError(
+            code="quality_unavailable",
+            message="No eligible provider has configured health for quality routing.",
+            status_code=422,
+        )
+    if error.category is RoutingErrorCategory.PROVIDER_UNHEALTHY:
+        return GatewayAPIError(
+            code="provider_unhealthy",
+            message="The requested provider is unavailable for routing.",
+            status_code=422,
+        )
     if error.category is RoutingErrorCategory.UNSUPPORTED_OBJECTIVE:
         return GatewayAPIError(
             code="invalid_request",
@@ -154,6 +166,7 @@ def _to_api_response(
                 else None
             ),
             estimated_latency_ms=execution.routing_decision.estimated_latency_ms,
+            health_score=execution.routing_decision.health_score,
         ),
         request_id=request_id,
     )

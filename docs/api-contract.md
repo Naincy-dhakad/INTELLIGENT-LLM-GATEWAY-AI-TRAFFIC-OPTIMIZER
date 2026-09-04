@@ -52,9 +52,17 @@ Cost estimates use a bounded standard-library approximation: input characters di
 
 Provider metadata may declare `ModelLatency` in positive milliseconds. This is configured estimate data, not a live measurement and not a health score. Providers without latency metadata have `UNKNOWN` latency: unknown values are never zero, cannot satisfy a ceiling, and cannot win latency routing. No network probe or provider call is made. `latency_unavailable` means no usable latency metadata exists; `latency_limit_exceeded` means known candidates exist but all exceed the ceiling. Successful latency routing may include `estimated_latency_ms` in safe routing metadata.
 
+### Provider health-aware routing (Phase 12)
+
+`routing.objective` may be `quality`. This means the highest configured normalized health score currently available to the gateway, not subjective answer quality, model intelligence, or benchmarking. Health policy uses version `classification-cost-latency-quality-v1` and ranks eligible models by health score descending, then provider ID and model ID lexically.
+
+Normalized health scores are integers from 0 to 100 with statuses `healthy`, `degraded`, `unavailable`, and `unknown`. The mock provider derives status deterministically: scores at least 80 are healthy, scores from 40 through 79 are degraded, and scores below 40 are unavailable. Unavailable models are excluded from every routing objective. Unknown health remains distinct from perfect health, may participate in balanced/cost/latency routing when otherwise eligible, but cannot win quality routing. If no usable health exists, routing returns `quality_unavailable`; an explicitly requested unavailable provider returns `provider_unhealthy`.
+
+Health values are configured metadata only. There are no live probes, runtime failure tracking, background monitors, retries, or fallback behavior in this phase.
+
 ### Provider and routing boundary (Phase 7)
 
-The application calls a provider-neutral `Provider` protocol with normalized `ProviderChatRequest` and `ProviderChatResponse` models. A `ProviderRegistry` performs only provider ID lookup and exposes the explicitly configured default; it does not rank, score, retry, or fallback. The deterministic routing policy filters registered metadata by explicit provider, capability, model, and applicable cost constraints, then applies the configured balanced or cost policy and stable tie-breakers. It does not use measured latency, health, request content, randomness, or LLM calls; latency policy uses only configured normalized estimates. Real providers are registered only when their required configuration is present; tests use fake clients/transports and the `phase3-mock` implementation remains deterministic and credential-free.
+The application calls a provider-neutral `Provider` protocol with normalized `ProviderChatRequest` and `ProviderChatResponse` models. A `ProviderRegistry` performs only provider ID lookup and exposes the explicitly configured default; it does not rank, score, retry, or fallback. The deterministic routing policy filters registered metadata by explicit provider, capability, model, and applicable cost constraints, then applies the configured balanced, cost, latency, or quality policy and stable tie-breakers. It does not use measured latency, health, request content, randomness, or LLM calls; latency policy uses only configured normalized estimates. Real providers are registered only when their required configuration is present; tests use fake clients/transports and the `phase3-mock` implementation remains deterministic and credential-free.
 
 ### Request headers
 
@@ -112,7 +120,7 @@ The example is illustrative; the endpoint is not available in Phase 1.
 | `requirements` | object | No | Hard request requirements used for capability eligibility. |
 | `requirements.capabilities` | array of capability IDs | No | Every listed capability must be supported by the selected model. Unknown capability IDs are invalid in v1. |
 | `routing` | object | No | Caller constraints and a deterministic routing objective. |
-| `routing.objective` | `quality \| latency \| cost \| balanced` | No | `balanced`, `cost`, and `latency` are implemented policy objectives. `quality` remains unsupported. Default is `balanced`. |
+| `routing.objective` | `quality \| latency \| cost \| balanced` | No | `balanced`, `cost`, `latency`, and `quality` are implemented policy objectives. Default is `balanced`. |
 | `routing.max_cost_usd` | non-negative number or null | No | Optional hard estimated per-request cost ceiling. It is a policy constraint, not a billing guarantee. |
 | `routing.max_latency_ms` | positive integer or null | No | Optional hard configured estimated-latency ceiling, bounded to 120,000 ms. It is not a live measurement. |
 | `generation` | object | No | Provider-neutral generation controls supported by the selected model. Unsupported controls are rejected or normalized; they are never silently ignored. |
@@ -168,7 +176,7 @@ The example is illustrative. Fields have these meanings:
 - `finish_reason` is normalized (`stop`, `length`, `tool_call`, `content_filter`, or `unknown`). The initial non-tool implementation may return only applicable values.
 - `usage` is nullable. Token counts are included only when reliably reported; unknown values are `null`, never guessed.
 - `latency_ms` is gateway-observed end-to-end request latency, rounded to an integer.
-- `routing` is safe operational metadata. `policy_version`, reason codes, and fallback status may be omitted or restricted by tenant policy. Phase 8 classification fields and the Phase 10 bounded `estimated_cost_usd` and Phase 11 `estimated_latency_ms` estimates may be included. Provider scores, secrets, internal URLs, matched phrases, pricing internals, latency internals, and raw prompts are never exposed.
+- `routing` is safe operational metadata. `policy_version`, reason codes, and fallback status may be omitted or restricted by tenant policy. Phase 8 classification fields, the Phase 10 bounded `estimated_cost_usd`, the Phase 11 `estimated_latency_ms`, and the Phase 12 selected `health_score` may be included. Candidate rankings, secrets, internal URLs, matched phrases, pricing internals, latency internals, health details, and raw prompts are never exposed.
 - `request_id` duplicates the correlation ID in the body for clients that do not preserve response headers. The same value is returned as `X-Request-ID`.
 
 Optional response fields may be added within v1. Clients must ignore fields they do not understand.
@@ -191,7 +199,7 @@ Every error uses `application/json` and the same envelope:
 }
 ```
 
-This is an example only. `message` is safe for clients and must not contain stack traces, provider response bodies, authorization headers, API keys, or raw prompt/completion content. `details` is optional, bounded, and machine-readable; clients must not depend on undocumented detail keys. Phase 10 cost routing may return `cost_unavailable` when no eligible candidate has configured pricing, or `cost_limit_exceeded` when known candidates exceed `max_cost_usd`; both are non-retryable validation/policy outcomes.
+This is an example only. `message` is safe for clients and must not contain stack traces, provider response bodies, authorization headers, API keys, or raw prompt/completion content. `details` is optional, bounded, and machine-readable; clients must not depend on undocumented detail keys. Phase 10 cost routing may return `cost_unavailable` when no eligible candidate has configured pricing, or `cost_limit_exceeded` when known candidates exceed `max_cost_usd`; both are non-retryable validation/policy outcomes. Quality routing may return `quality_unavailable` when no eligible model has usable health metadata, or `provider_unhealthy` for an explicitly requested unavailable provider; these are also non-retryable policy outcomes.
 
 ### Initial status and code mapping
 

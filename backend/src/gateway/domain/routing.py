@@ -8,11 +8,13 @@ from gateway.domain.classification import (
     RequestCategory,
 )
 from gateway.domain.cost import TokenEstimate, estimated_cost_usd
+from gateway.domain.health import health_for_model
 from gateway.domain.latency import configured_latency_ms
 from gateway.domain.provider import (
     Capability,
     ModelLatency,
     ModelPricing,
+    ProviderHealth,
     ProviderMetadata,
 )
 
@@ -27,6 +29,8 @@ class RoutingErrorCategory(StrEnum):
     COST_LIMIT_EXCEEDED = "cost_limit_exceeded"
     LATENCY_UNAVAILABLE = "latency_unavailable"
     LATENCY_LIMIT_EXCEEDED = "latency_limit_exceeded"
+    QUALITY_UNAVAILABLE = "quality_unavailable"
+    PROVIDER_UNHEALTHY = "provider_unhealthy"
 
 
 @dataclass(frozen=True)
@@ -61,6 +65,7 @@ class RoutingCandidate:
     supports_streaming: bool
     pricing: tuple[ModelPricing, ...] = ()
     latency: tuple[ModelLatency, ...] = ()
+    health: tuple[ProviderHealth, ...] = ()
 
     @classmethod
     def from_metadata(cls, metadata: ProviderMetadata) -> "RoutingCandidate":
@@ -72,6 +77,7 @@ class RoutingCandidate:
             supports_streaming=metadata.supports_streaming,
             pricing=metadata.pricing,
             latency=metadata.latency,
+            health=metadata.health,
         )
 
 
@@ -83,6 +89,7 @@ class RoutingDecision:
     policy_version: str = "classification-v1"
     estimated_cost_usd: Decimal | None = None
     estimated_latency_ms: int | None = None
+    health_score: int | None = None
 
 
 @dataclass(frozen=True)
@@ -106,6 +113,8 @@ class _ModelCandidate:
     model_id: str
     estimated_cost: Decimal | None
     estimated_latency_ms: int | None
+    health_score: int | None
+    health_status: str
 
 
 class DeterministicRoutingPolicy:
@@ -114,7 +123,8 @@ class DeterministicRoutingPolicy:
     POLICY_VERSION = "classification-v1"
     COST_POLICY_VERSION = "classification-cost-v1"
     LATENCY_POLICY_VERSION = "classification-cost-latency-v1"
-    SUPPORTED_OBJECTIVES = frozenset({"balanced", "cost", "latency"})
+    QUALITY_POLICY_VERSION = "classification-cost-latency-quality-v1"
+    SUPPORTED_OBJECTIVES = frozenset({"balanced", "cost", "latency", "quality"})
     _DEFAULT_PROVIDER_BONUS = 5
     _CATEGORY_CAPABILITY_BONUS = 20
     _COMPLEXITY_CAPABILITY_BONUS = 10
@@ -150,9 +160,17 @@ class DeterministicRoutingPolicy:
                 RoutingErrorCategory.NO_ELIGIBLE_PROVIDER,
                 "No configured provider satisfies the request.",
             )
+        health_eligible = tuple(
+            candidate for candidate in eligible if not self._candidate_unavailable(candidate, request)
+        )
+        if not health_eligible:
+            if request.requested_provider_id and self._candidate_unavailable(eligible[0], request):
+                raise RoutingError(RoutingErrorCategory.PROVIDER_UNHEALTHY, "The requested provider is unavailable for routing.")
+            raise RoutingError(RoutingErrorCategory.NO_ELIGIBLE_PROVIDER, "No configured provider satisfies the request.")
+        eligible = health_eligible
 
         needs_constraints = request.max_cost_usd is not None or request.max_latency_ms is not None
-        if request.objective in {"cost", "latency"} or needs_constraints:
+        if request.objective in {"cost", "latency", "quality"} or needs_constraints:
             models = self._constrained_models(request, eligible)
             winner = self._select_models(request, models, default_provider_id)
             policy_version = self._policy_version(request)
@@ -168,6 +186,11 @@ class DeterministicRoutingPolicy:
                     f'Provider "{winner.candidate.provider_id}" model "{winner.model_id}" selected '
                     "because it has the lowest configured estimated latency among eligible candidates."
                 )
+            elif request.objective == "quality":
+                reason = (
+                    f'Provider "{winner.candidate.provider_id}" model "{winner.model_id}" selected '
+                    "because it has the highest configured health score among eligible candidates."
+                )
             else:
                 reason = self._reason(request, winner.candidate, self._preference_score(request, winner.candidate, default_provider_id), default_provider_id)
             return RoutingDecision(
@@ -177,6 +200,7 @@ class DeterministicRoutingPolicy:
                 policy_version,
                 winner.estimated_cost,
                 winner.estimated_latency_ms,
+                winner.health_score,
             )
 
         if request.requested_provider_id:
@@ -197,6 +221,17 @@ class DeterministicRoutingPolicy:
             self.POLICY_VERSION,
         )
 
+    @staticmethod
+    def _candidate_unavailable(candidate: RoutingCandidate, request: RoutingRequest) -> bool:
+        model_ids = ((request.requested_model_id,) if request.requested_model_id else candidate.model_ids)
+        return any(
+            health_for_model(candidate.health, model_id).status.value == "unavailable"
+            for model_id in model_ids
+        ) and all(
+            health_for_model(candidate.health, model_id).status.value == "unavailable"
+            for model_id in model_ids
+        )
+
     def _constrained_models(
         self, request: RoutingRequest, eligible: tuple[RoutingCandidate, ...]
     ) -> tuple[_ModelCandidate, ...]:
@@ -209,6 +244,9 @@ class DeterministicRoutingPolicy:
             )
             prices = {item.model_id: item for item in candidate.pricing}
             for model_id in model_ids:
+                model_health = health_for_model(candidate.health, model_id)
+                if model_health.status.value == "unavailable":
+                    continue
                 price = prices.get(model_id)
                 cost = None
                 if price is not None and request.token_estimate is not None:
@@ -221,6 +259,8 @@ class DeterministicRoutingPolicy:
                     _ModelCandidate(
                         candidate, model_id, cost,
                         configured_latency_ms(candidate.latency, model_id),
+                        health_for_model(candidate.health, model_id).health_score,
+                        health_for_model(candidate.health, model_id).status.value,
                     )
                 )
 
@@ -248,6 +288,11 @@ class DeterministicRoutingPolicy:
         return tuple(models)
 
     def _select_models(self, request, models, default_provider_id):
+        if request.objective == "quality":
+            usable = [item for item in models if item.health_score is not None]
+            if not usable:
+                raise RoutingError(RoutingErrorCategory.QUALITY_UNAVAILABLE, "No eligible candidate has configured health for quality routing.")
+            return min(usable, key=lambda item: (-item.health_score, item.candidate.provider_id, item.model_id))
         if request.objective == "cost":
             usable = [item for item in models if item.estimated_cost is not None]
             if not usable:
@@ -268,6 +313,8 @@ class DeterministicRoutingPolicy:
         )
 
     def _policy_version(self, request: RoutingRequest) -> str:
+        if request.objective == "quality":
+            return self.QUALITY_POLICY_VERSION
         if request.objective == "latency" or request.max_latency_ms is not None:
             return self.LATENCY_POLICY_VERSION
         if request.objective == "cost" or request.max_cost_usd is not None:

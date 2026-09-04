@@ -33,6 +33,7 @@ def create_app() -> FastAPI:
             input_usd_per_million_tokens=settings.phase3_mock_input_usd_per_million_tokens,
             output_usd_per_million_tokens=settings.phase3_mock_output_usd_per_million_tokens,
             estimated_latency_ms=settings.phase3_mock_latency_ms,
+            health_score=settings.phase3_mock_health_score,
         )
     ]
     if settings.openai_api_key:

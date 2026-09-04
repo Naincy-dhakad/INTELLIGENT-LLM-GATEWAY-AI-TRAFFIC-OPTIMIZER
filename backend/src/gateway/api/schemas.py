@@ -114,6 +114,7 @@ class RoutingMetadata(StrictModel):
     complexity_score: int | None = Field(default=None, ge=0, le=100)
     estimated_cost_usd: float | None = Field(default=None, ge=0)
     estimated_latency_ms: int | None = Field(default=None, gt=0, le=120_000)
+    health_score: int | None = Field(default=None, ge=0, le=100)
 
 
 class ErrorBody(StrictModel):

@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     phase3_mock_input_usd_per_million_tokens: Decimal = Decimal("1")
     phase3_mock_output_usd_per_million_tokens: Decimal = Decimal("2")
     phase3_mock_latency_ms: int = 100
+    phase3_mock_health_score: int = 100
     openai_api_key: SecretStr | None = None
     openai_default_model: str = "gpt-4o-mini"
     anthropic_api_key: SecretStr | None = None

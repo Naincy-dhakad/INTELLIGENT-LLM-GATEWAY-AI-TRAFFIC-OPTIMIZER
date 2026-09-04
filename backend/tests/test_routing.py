@@ -126,7 +126,7 @@ def test_ineligible_requests_raise_structured_routing_errors(
 def test_unsupported_objective_is_rejected_without_fake_optimization() -> None:
     with pytest.raises(RoutingError) as raised:
         DeterministicRoutingPolicy().route(
-            request(objective="quality"),
+            request(objective="unsupported"),
             (candidate("openai", "gpt"),),
             default_provider_id="openai",
         )

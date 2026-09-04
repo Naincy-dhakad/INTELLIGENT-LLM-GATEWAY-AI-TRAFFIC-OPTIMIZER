@@ -4,7 +4,7 @@ Production-oriented portfolio project for an LLM gateway, policy-driven traffic 
 
 ## Project status
 
-**Phase 11 — Latency-aware deterministic routing complete.** Balanced and cost-aware routing remain intact; the latency objective now ranks eligible candidates using configured normalized model latency and supports a hard latency ceiling. Latency is configured metadata, not measured health data. Health scoring, retries, fallback, budgets, authentication, database, Redis, streaming, and optimization recommendations are not implemented.
+**Phase 12 — Provider health-aware deterministic routing complete.** Balanced, cost-aware, and latency-aware routing remain intact. The quality objective now ranks eligible candidates by configured normalized health score; health is metadata, not live monitoring or measured provider reliability. Retries, fallback, budgets, authentication, database, Redis, streaming, and optimization recommendations are not implemented.
 
 - [Architecture freeze](docs/architecture-freeze.md): source of truth for system and implementation boundaries.
 - [Gateway API contract](docs/api-contract.md): versioned `/api/v1` contract and provider-neutral boundary.
@@ -31,7 +31,7 @@ python -m uvicorn gateway.main:app --reload
 
 The foundation health check is available at <http://127.0.0.1:8000/health>.
 
-Cost routing uses normalized USD-per-million-token pricing declared in provider metadata. The deterministic mock provider's input/output pricing is configurable with `PHASE3_MOCK_INPUT_USD_PER_MILLION_TOKENS` and `PHASE3_MOCK_OUTPUT_USD_PER_MILLION_TOKENS`; missing pricing is unknown, never zero. Its configured latency is controlled by `PHASE3_MOCK_LATENCY_MS`; this is an estimate for routing, not a live measurement.
+Cost routing uses normalized USD-per-million-token pricing declared in provider metadata. The deterministic mock provider's input/output pricing is configurable with `PHASE3_MOCK_INPUT_USD_PER_MILLION_TOKENS` and `PHASE3_MOCK_OUTPUT_USD_PER_MILLION_TOKENS`; missing pricing is unknown, never zero. Its configured latency is controlled by `PHASE3_MOCK_LATENCY_MS`; this is an estimate for routing, not a live measurement. Its normalized health score is controlled by `PHASE3_MOCK_HEALTH_SCORE` from 0 to 100; this is deterministic metadata, not runtime health monitoring.
 It is intentionally self-contained and does not connect to PostgreSQL or Redis.
 
 Run backend tests from `backend`:

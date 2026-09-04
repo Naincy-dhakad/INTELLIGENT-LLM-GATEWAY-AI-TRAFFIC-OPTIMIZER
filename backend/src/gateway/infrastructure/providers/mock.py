@@ -7,8 +7,10 @@ from gateway.domain.provider import (
     ProviderChatResponse,
     ProviderError,
     ProviderErrorCategory,
+    HealthStatus,
     ModelLatency,
     ModelPricing,
+    ProviderHealth,
     ProviderMetadata,
     ProviderMessage,
 )
@@ -23,6 +25,7 @@ class MockProvider:
         input_usd_per_million_tokens: Decimal = Decimal("1"),
         output_usd_per_million_tokens: Decimal = Decimal("2"),
         estimated_latency_ms: int = 100,
+        health_score: int = 100,
     ) -> None:
         self._metadata = ProviderMetadata(
             id=provider_id,
@@ -38,6 +41,11 @@ class MockProvider:
                 ),
             ),
             latency=(ModelLatency(model_id="phase3-mock-model", estimated_latency_ms=estimated_latency_ms),),
+            health=(ProviderHealth(
+                model_id="phase3-mock-model",
+                health_score=health_score,
+                status=(HealthStatus.HEALTHY if health_score >= 80 else HealthStatus.DEGRADED if health_score >= 40 else HealthStatus.UNAVAILABLE),
+            ),),
         )
 
     @property

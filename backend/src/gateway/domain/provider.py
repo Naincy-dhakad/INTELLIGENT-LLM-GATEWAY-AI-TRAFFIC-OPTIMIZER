@@ -3,7 +3,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class Capability(StrEnum):
@@ -104,6 +104,31 @@ class ModelLatency(BaseModel):
     estimated_latency_ms: int = Field(gt=0, le=120_000)
 
 
+class HealthStatus(StrEnum):
+    HEALTHY = "healthy"
+    DEGRADED = "degraded"
+    UNAVAILABLE = "unavailable"
+    UNKNOWN = "unknown"
+
+
+class ProviderHealth(BaseModel):
+    """Configured normalized health, not runtime monitoring state."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    model_id: str = Field(min_length=1, max_length=128)
+    health_score: int | None = Field(default=None, ge=0, le=100)
+    status: HealthStatus = HealthStatus.UNKNOWN
+
+    @model_validator(mode="after")
+    def score_matches_status(self) -> "ProviderHealth":
+        if self.status is HealthStatus.UNKNOWN and self.health_score is not None:
+            raise ValueError("unknown health must not include a score")
+        if self.status is not HealthStatus.UNKNOWN and self.health_score is None:
+            raise ValueError("known health status requires a score")
+        return self
+
+
 class ProviderMetadata(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -114,6 +139,7 @@ class ProviderMetadata(BaseModel):
     supports_streaming: bool = False
     pricing: tuple[ModelPricing, ...] = ()
     latency: tuple[ModelLatency, ...] = ()
+    health: tuple[ProviderHealth, ...] = ()
 
 
 @runtime_checkable
