@@ -312,6 +312,47 @@ class DeterministicRoutingPolicy:
             ),
         )
 
+    def fallback_options(
+        self,
+        request: RoutingRequest,
+        candidates: tuple[RoutingCandidate, ...],
+        *,
+        default_provider_id: str | None,
+        attempted: frozenset[tuple[str, str]],
+    ) -> tuple[tuple[RoutingCandidate, str], ...]:
+        """Return bounded deterministic alternatives without making a new route decision."""
+
+        eligible = self._eligible(request, candidates)
+        eligible = tuple(
+            candidate
+            for candidate in eligible
+            if not self._candidate_unavailable(candidate, request)
+        )
+        try:
+            models = self._constrained_models(request, eligible)
+        except RoutingError:
+            return ()
+        models = tuple(
+            item for item in models
+            if (item.candidate.provider_id, item.model_id) not in attempted
+        )
+        if request.objective == "quality":
+            models = tuple(item for item in models if item.health_score is not None)
+            key = lambda item: (-item.health_score, item.candidate.provider_id, item.model_id)
+        elif request.objective == "cost":
+            models = tuple(item for item in models if item.estimated_cost is not None)
+            key = lambda item: (item.estimated_cost, item.candidate.provider_id, item.model_id)
+        elif request.objective == "latency":
+            models = tuple(item for item in models if item.estimated_latency_ms is not None)
+            key = lambda item: (item.estimated_latency_ms, item.candidate.provider_id, item.model_id)
+        else:
+            key = lambda item: (
+                -self._preference_score(request, item.candidate, default_provider_id).total,
+                item.candidate.provider_id,
+                item.model_id,
+            )
+        return tuple((item.candidate, item.model_id) for item in sorted(models, key=key))
+
     def _policy_version(self, request: RoutingRequest) -> str:
         if request.objective == "quality":
             return self.QUALITY_POLICY_VERSION

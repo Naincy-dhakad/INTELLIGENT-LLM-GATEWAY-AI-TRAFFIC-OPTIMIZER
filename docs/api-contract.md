@@ -160,7 +160,8 @@ A successful response has HTTP `200 OK` and this normalized shape:
   "routing": {
     "policy_version": "policy-2026-01",
     "decision_reason": "capability_and_policy_match",
-    "fallback_used": false
+    "fallback_used": false,
+    "attempt_count": 1
   },
   "request_id": "req_01J..."
 }
@@ -176,7 +177,8 @@ The example is illustrative. Fields have these meanings:
 - `finish_reason` is normalized (`stop`, `length`, `tool_call`, `content_filter`, or `unknown`). The initial non-tool implementation may return only applicable values.
 - `usage` is nullable. Token counts are included only when reliably reported; unknown values are `null`, never guessed.
 - `latency_ms` is gateway-observed end-to-end request latency, rounded to an integer.
-- `routing` is safe operational metadata. `policy_version`, reason codes, and fallback status may be omitted or restricted by tenant policy. Phase 8 classification fields, the Phase 10 bounded `estimated_cost_usd`, the Phase 11 `estimated_latency_ms`, and the Phase 12 selected `health_score` may be included. Candidate rankings, secrets, internal URLs, matched phrases, pricing internals, latency internals, health details, and raw prompts are never exposed.
+- `routing` is safe operational metadata. `policy_version`, reason codes, fallback status, and bounded `attempt_count` may be omitted or restricted by tenant policy. Phase 8 classification fields, the Phase 10 bounded `estimated_cost_usd`, the Phase 11 `estimated_latency_ms`, and the Phase 12 selected `health_score` may be included. Candidate rankings, secrets, internal URLs, matched phrases, pricing internals, latency internals, health details, and raw prompts are never exposed.
+- Retryable normalized provider failures are limited to timeout, rate limit, and unavailable. Execution allows one same-provider retry after a deterministic 50 ms backoff and at most one deterministic eligible fallback, all sharing the original deadline. Explicit-provider requests never cross providers; non-retryable failures never retry.
 - `request_id` duplicates the correlation ID in the body for clients that do not preserve response headers. The same value is returned as `X-Request-ID`.
 
 Optional response fields may be added within v1. Clients must ignore fields they do not understand.

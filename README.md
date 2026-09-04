@@ -4,7 +4,7 @@ Production-oriented portfolio project for an LLM gateway, policy-driven traffic 
 
 ## Project status
 
-**Phase 12 — Provider health-aware deterministic routing complete.** Balanced, cost-aware, and latency-aware routing remain intact. The quality objective now ranks eligible candidates by configured normalized health score; health is metadata, not live monitoring or measured provider reliability. Retries, fallback, budgets, authentication, database, Redis, streaming, and optimization recommendations are not implemented.
+**Phase 13 — Deadline-aware retry and bounded fallback complete.** Balanced, cost-aware, latency-aware, and health-aware deterministic routing remain intact. Provider failures are normalized and may receive one same-provider retry plus one eligible fallback within the original request deadline. Budgets, authentication, database, Redis, streaming, and optimization recommendations remain outside this phase.
 
 - [Architecture freeze](docs/architecture-freeze.md): source of truth for system and implementation boundaries.
 - [Gateway API contract](docs/api-contract.md): versioned `/api/v1` contract and provider-neutral boundary.

@@ -156,7 +156,8 @@ def _to_api_response(
         routing=RoutingMetadata(
             policy_version=decision.policy_version,
             decision_reason=decision.reason,
-            fallback_used=False,
+            fallback_used=execution.fallback_used,
+            attempt_count=execution.attempt_count,
             category=execution.classification.category.value,
             complexity_level=execution.classification.complexity_level.value,
             complexity_score=execution.classification.complexity_score,
