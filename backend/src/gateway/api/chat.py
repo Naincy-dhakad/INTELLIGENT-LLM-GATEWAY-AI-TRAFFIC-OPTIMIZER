@@ -19,7 +19,7 @@ from gateway.application.rate_limiting import RateLimitUnavailable
 from gateway.application.usage_tracking import record_success
 from gateway.application.observability_events import EventType, make_event
 from gateway.domain.provider import ProviderError, ProviderErrorCategory
-from gateway.domain.routing import RoutingError, RoutingErrorCategory
+from gateway.domain.routing import DeterministicRoutingPolicy, RoutingError, RoutingErrorCategory
 
 router = APIRouter(prefix="/api/v1", tags=["gateway"])
 DEFAULT_TIMEOUT_MS = 60_000
@@ -102,6 +102,22 @@ def require_rate_limit(
         limit=request.app.state.rate_limit_requests,
         window_seconds=request.app.state.rate_limit_window_seconds,
     )
+
+
+def _emit_budget_unavailable(request: Request, objective: str) -> None:
+    try:
+        request.app.state.observability.emit(
+            make_event(
+                EventType.BUDGET_DECISION,
+                request.state.request_id,
+                outcome="failure",
+                error_code="budget_unavailable",
+                objective=objective,
+                policy_version=DeterministicRoutingPolicy.BUDGET_POLICY_VERSION,
+            )
+        )
+    except Exception:
+        pass
 
 
 def _header_timeout(request: Request) -> int | None:
@@ -303,6 +319,10 @@ def chat(
             principal_id = _principal.key_id if _principal is not None else None
             budget_snapshot = request.app.state.budget_service.snapshot(principal_id, configured_budget)
         except BudgetUnavailable as exc:
+            _emit_budget_unavailable(
+                request,
+                body.routing.objective if body.routing else "balanced",
+            )
             raise GatewayAPIError(
                 code="budget_unavailable",
                 message="Budget information is temporarily unavailable.",

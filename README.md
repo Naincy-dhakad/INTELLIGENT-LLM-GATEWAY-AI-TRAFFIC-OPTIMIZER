@@ -100,3 +100,7 @@ The gateway now emits safe `gateway_authentication_result` and `gateway_rate_lim
 ### Phase 18 classification observability
 
 The gateway emits `gateway_classification_completed` with the normalized category, complexity level, complexity score, policy version, and request ID. Prompts, matched phrases, raw user content, and secrets are never emitted. Budget, routing, provider, retry, and fallback observability remain deferred.
+
+### Phase 18 budget observability
+
+The gateway emits `gateway_budget_decision` with normalized outcome, objective, policy version, and existing bounded error codes where applicable. Sensitive request content, credentials, and exact financial or budget amounts are never emitted. Routing, provider, retry, fallback, and metrics endpoint observability remain deferred.

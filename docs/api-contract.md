@@ -327,3 +327,7 @@ Authentication and rate-limit outcomes now emit normalized observability events 
 ## Phase 18 classification observability
 
 The gateway emits `gateway_classification_completed` after the existing deterministic classifier succeeds. The event contains only the normalized category, complexity level, complexity score, policy version, and request ID. Prompts, matched phrases, raw user content, completions, and secrets are never emitted. Budget, routing, provider, retry, and fallback observability remain deferred.
+
+## Phase 18 budget observability
+
+The gateway emits `gateway_budget_decision` at the existing budget decision boundaries using normalized outcome, objective, policy version, and approved error codes. Prompts, credentials, database or Redis information, accumulated spend, remaining budget, maximum budget, estimated request cost, and arbitrary metadata are not emitted. Routing, provider, retry, fallback, and metrics endpoint observability remain deferred.

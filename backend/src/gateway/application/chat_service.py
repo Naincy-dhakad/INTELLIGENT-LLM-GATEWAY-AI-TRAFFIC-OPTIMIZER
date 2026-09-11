@@ -30,6 +30,7 @@ from gateway.domain.routing import (
     DeterministicRoutingPolicy,
     RoutingCandidate,
     RoutingDecision,
+    RoutingError,
     RoutingRequest,
 )
 
@@ -101,9 +102,20 @@ class ChatService:
             RoutingCandidate.from_metadata(provider.metadata)
             for provider in self._registry.list()
         )
-        decision = self._routing_policy.route(
-            routing_request, candidates,
-            default_provider_id=self._registry.default_provider_id,
+        try:
+            decision = self._routing_policy.route(
+                routing_request, candidates,
+                default_provider_id=self._registry.default_provider_id,
+            )
+        except RoutingError as error:
+            self._emit_budget_decision(context.request_id, routing_request, "failure", error.category.value)
+            raise
+        self._emit_budget_decision(
+            context.request_id,
+            routing_request,
+            "success",
+            None,
+            decision.policy_version,
         )
         primary = self._registry.get(decision.selected_provider_id)
         if primary is None:
@@ -172,6 +184,31 @@ class ChatService:
             category=ProviderErrorCategory.TIMEOUT,
             message="The request deadline expired before provider execution.",
         )
+
+    def _emit_budget_decision(
+        self,
+        request_id: str,
+        request: RoutingRequest,
+        outcome: str,
+        error_code: str | None = None,
+        policy_version: str | None = None,
+    ) -> None:
+        if request.objective != "budget" and request.max_budget_usd is None:
+            return
+        attributes = {
+            "outcome": outcome,
+            "objective": request.objective,
+            "policy_version": policy_version or self._routing_policy._policy_version(request),
+        }
+        if error_code is not None:
+            attributes["error_code"] = error_code
+        try:
+            self._observability.emit(
+                make_event(EventType.BUDGET_DECISION, request_id, **attributes)
+            )
+        except Exception:
+            # Budget behavior must not depend on telemetry.
+            pass
 
     def _emit_classification(self, context: RequestContext, classification: ClassificationResult) -> None:
         try:
