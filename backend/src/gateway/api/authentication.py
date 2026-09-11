@@ -11,6 +11,7 @@ import secrets
 from fastapi import Request
 
 from gateway.api.errors import GatewayAPIError
+from gateway.application.observability_events import EventType, make_event
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,10 @@ class GatewayAuthenticator:
             for raw_key in (configured_keys or "").split(",")
             if raw_key.strip()
         )
+
+    @property
+    def enabled(self) -> bool:
+        return self._enabled
 
     @staticmethod
     def _digest(api_key: str) -> bytes:
@@ -54,9 +59,32 @@ class GatewayAuthenticator:
         )
 
 
+def _emit_authentication_result(request: Request, outcome: str, status_code: int) -> None:
+    try:
+        request.app.state.observability.emit(
+            make_event(
+                EventType.AUTHENTICATION_RESULT,
+                request.state.request_id,
+                outcome=outcome,
+                route=request.url.path[:128],
+                status_code=status_code,
+            )
+        )
+    except Exception:
+        pass
+
+
 def require_gateway_auth(request: Request) -> AuthenticatedPrincipal | None:
     authenticator: GatewayAuthenticator = request.app.state.gateway_authenticator
-    principal = authenticator.authenticate(request.headers.get("X-API-Key"))
+    if not authenticator.enabled:
+        _emit_authentication_result(request, "disabled", 200)
+        return None
+    try:
+        principal = authenticator.authenticate(request.headers.get("X-API-Key"))
+    except GatewayAPIError:
+        _emit_authentication_result(request, "failure", 401)
+        raise
+    _emit_authentication_result(request, "success", 200)
     if principal is not None:
         request.state.authenticated_principal = principal
     return principal

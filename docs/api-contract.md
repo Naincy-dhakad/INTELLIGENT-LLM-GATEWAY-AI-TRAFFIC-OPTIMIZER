@@ -319,3 +319,7 @@ The observability foundation defines an application-level, provider-neutral even
 ## Phase 18 lifecycle instrumentation
 
 The gateway lifecycle now emits normalized `gateway_request_started` and `gateway_request_completed` events through the application observability port. Both events use the existing request ID; completion latency uses a monotonic clock. Event emission is best-effort and cannot change client-visible behavior. Authentication, rate-limit, classification, budget, routing, provider, retry, fallback, metrics endpoint, readiness endpoint, and tracing instrumentation remain deferred to later Phase 18 steps.
+
+## Phase 18 authentication and rate-limit observability
+
+Authentication and rate-limit outcomes now emit normalized observability events using the existing request ID. Events use bounded outcomes and route/configuration values only; raw API keys, authorization values, principal identifiers as metric labels, Redis URLs/keys/errors, and provider credentials are never emitted. Authentication and rate-limit behavior is unchanged. Classification, budget, routing, provider, retry, fallback, external metrics, readiness, and tracing instrumentation remain deferred.

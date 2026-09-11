@@ -54,8 +54,8 @@ _FORBIDDEN = frozenset(
 # callers from using the event API as an arbitrary structured logging channel.
 _ALLOWED_FIELDS: dict[EventType, frozenset[str]] = {
     EventType.REQUEST_STARTED: frozenset({"route", "method", "environment"}),
-    EventType.AUTHENTICATION_RESULT: frozenset({"outcome", "principal_id", "route"}),
-    EventType.RATE_LIMIT_RESULT: frozenset({"outcome", "limit", "window_seconds", "retry_after_seconds"}),
+    EventType.AUTHENTICATION_RESULT: frozenset({"outcome", "principal_id", "route", "status_code"}),
+    EventType.RATE_LIMIT_RESULT: frozenset({"outcome", "limit", "window_seconds", "retry_after_seconds", "route"}),
     EventType.REQUEST_VALIDATION_RESULT: frozenset({"outcome", "error_code", "status_code"}),
     EventType.CLASSIFICATION_COMPLETED: frozenset({"category", "complexity_level", "complexity_score", "policy_version"}),
     EventType.BUDGET_DECISION: frozenset({"outcome", "error_code", "objective", "policy_version"}),

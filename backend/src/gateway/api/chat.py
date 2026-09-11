@@ -17,6 +17,7 @@ from gateway.application.chat_service import ChatExecutionResult, ChatService
 from gateway.application.context import RequestContext
 from gateway.application.rate_limiting import RateLimitUnavailable
 from gateway.application.usage_tracking import record_success
+from gateway.application.observability_events import EventType, make_event
 from gateway.domain.provider import ProviderError, ProviderErrorCategory
 from gateway.domain.routing import RoutingError, RoutingErrorCategory
 
@@ -29,11 +30,27 @@ def get_chat_service(request: Request) -> ChatService:
     return request.app.state.chat_service
 
 
+def _emit_rate_limit_result(request: Request, outcome: str, **attributes: object) -> None:
+    try:
+        request.app.state.observability.emit(
+            make_event(
+                EventType.RATE_LIMIT_RESULT,
+                request.state.request_id,
+                outcome=outcome,
+                route=request.url.path[:128],
+                **attributes,
+            )
+        )
+    except Exception:
+        pass
+
+
 def require_rate_limit(
     request: Request,
     principal: AuthenticatedPrincipal | None = Depends(require_gateway_auth),
 ) -> None:
     if not request.app.state.rate_limit_enabled:
+        _emit_rate_limit_result(request, "disabled")
         return
     if principal is None:
         raise GatewayAPIError(
@@ -49,6 +66,12 @@ def require_rate_limit(
             request.app.state.rate_limit_window_seconds,
         )
     except RateLimitUnavailable as exc:
+        _emit_rate_limit_result(
+            request,
+            "unavailable",
+            limit=request.app.state.rate_limit_requests,
+            window_seconds=request.app.state.rate_limit_window_seconds,
+        )
         raise GatewayAPIError(
             code="rate_limit_unavailable",
             message="Gateway rate limiting is temporarily unavailable.",
@@ -56,6 +79,13 @@ def require_rate_limit(
             retryable=True,
         ) from exc
     if not result.allowed:
+        _emit_rate_limit_result(
+            request,
+            "rejected",
+            limit=request.app.state.rate_limit_requests,
+            window_seconds=request.app.state.rate_limit_window_seconds,
+            retry_after_seconds=result.retry_after_seconds,
+        )
         headers = {}
         if result.retry_after_seconds is not None:
             headers["Retry-After"] = str(result.retry_after_seconds)
@@ -66,6 +96,12 @@ def require_rate_limit(
             retryable=True,
             headers=headers or None,
         )
+    _emit_rate_limit_result(
+        request,
+        "allowed",
+        limit=request.app.state.rate_limit_requests,
+        window_seconds=request.app.state.rate_limit_window_seconds,
+    )
 
 
 def _header_timeout(request: Request) -> int | None:

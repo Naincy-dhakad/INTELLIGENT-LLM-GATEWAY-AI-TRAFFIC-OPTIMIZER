@@ -92,3 +92,7 @@ The gateway includes a dependency-free application observability port with norma
 ### Phase 18 lifecycle instrumentation
 
 The gateway now emits safe `gateway_request_started` and `gateway_request_completed` events through the application observability port. Events reuse the existing request ID and measure total duration with a monotonic clock. Feature-specific events, external metrics/tracing, `/metrics`, and `/ready` remain deferred.
+
+### Phase 18 authentication and rate-limit events
+
+The gateway now emits safe `gateway_authentication_result` and `gateway_rate_limit_result` events at the existing API boundaries. Raw credentials, principal identifiers as metric labels, API keys, authorization values, and Redis internals are excluded. Classification, budget, routing, provider, retry, fallback, metrics, readiness, and tracing instrumentation remain deferred.

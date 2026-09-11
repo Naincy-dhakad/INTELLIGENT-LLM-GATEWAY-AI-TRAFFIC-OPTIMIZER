@@ -35,6 +35,7 @@ def create_app(observability: ObservabilityPort | None = None) -> FastAPI:
     settings = get_settings()
     observability = observability or NoopObservability()
     app = FastAPI(title=settings.app_name, version="0.1.0")
+    app.state.observability = observability
     app.state.gateway_authenticator = GatewayAuthenticator(
         settings.gateway_auth_enabled, settings.gateway_api_keys
     )
