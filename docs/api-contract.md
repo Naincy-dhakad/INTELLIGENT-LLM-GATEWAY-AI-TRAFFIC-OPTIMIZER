@@ -311,3 +311,7 @@ Capability values are eligibility requirements, not quality claims. The vocabula
 8. Add asynchronous submission, conversation persistence, tool calls, multimodal content, or idempotency only with a dedicated schema/ADR when their semantics are defined.
 9. Add fields as optional where possible. Use a new major path version for incompatible role/content, error-envelope, timeout, or response-shape changes.
 10. Keep the public contract independent of PostgreSQL, Redis, authentication vendor, observability vendor, and deployment platform choices.
+
+## Phase 18 observability foundation
+
+The observability foundation defines an application-level, provider-neutral event and metrics port. Events retain the existing request ID for correlation and accept only bounded operational fields. Prompts, completions, API keys, authorization values, provider-native errors, credentials, and infrastructure URLs are excluded by schema. A no-op implementation supports local development and tests; structured logging uses the standard library. External metrics, tracing, `/metrics`, `/ready`, and full lifecycle instrumentation are intentionally deferred.

@@ -84,3 +84,7 @@ docs/architecture-freeze.md
 ```
 
 The project deliberately keeps provider adapters, gateway authentication, routing, persistence, Redis, streaming, fallback, and deployment as separate bounded concerns.
+
+### Phase 18 observability foundation
+
+The gateway includes a dependency-free application observability port with normalized, request-correlated event types, a no-op implementation, bounded in-memory metrics for tests, and a standard-library structured logging adapter. The event schema excludes prompts, completions, credentials, API keys, authorization values, provider-native errors, and infrastructure URLs. Full lifecycle instrumentation, external metrics/tracing, `/metrics`, and `/ready` are intentionally deferred.
