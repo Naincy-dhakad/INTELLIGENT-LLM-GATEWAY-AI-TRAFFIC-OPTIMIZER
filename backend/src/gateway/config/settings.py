@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     rate_limit_requests: int = Field(default=60, gt=0)
     rate_limit_window_seconds: int = Field(default=60, gt=0)
+    usage_tracking_enabled: bool = False
+    database_url: str = "postgresql+psycopg://localhost/gateway"
 
     @model_validator(mode="after")
     def rate_limit_requires_authentication(self) -> "Settings":
@@ -37,6 +39,8 @@ class Settings(BaseSettings):
             raise ValueError("RATE_LIMIT_ENABLED requires GATEWAY_AUTH_ENABLED")
         if self.rate_limit_enabled and not self.redis_url.strip():
             raise ValueError("REDIS_URL is required when rate limiting is enabled")
+        if self.usage_tracking_enabled and not self.database_url.strip():
+            raise ValueError("DATABASE_URL is required when usage tracking is enabled")
         return self
 
     model_config = SettingsConfigDict(

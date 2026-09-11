@@ -107,6 +107,10 @@ class ChatService:
         # Initial attempt plus at most one retry of the same primary provider.
         for retry_number in range(RetryPolicy.MAX_TOTAL_ATTEMPTS - 1):
             attempt_count += 1
+            self._update_execution_metadata(
+                context, attempt_count, decision.selected_provider_id,
+                decision.selected_model_id, False,
+            )
             try:
                 response = self._attempt(primary, base_request, context)
                 return ChatExecutionResult(response, decision, classification, False, attempt_count)
@@ -139,6 +143,10 @@ class ChatService:
                 fallback_provider = self._registry.get(fallback_candidate.provider_id)
                 if fallback_provider is not None:
                     attempt_count += 1
+                    self._update_execution_metadata(
+                        context, attempt_count, fallback_candidate.provider_id,
+                        fallback_model, True,
+                    )
                     fallback_request = self._provider_request(
                         request, required_capabilities, fallback_model, context
                     )
@@ -154,6 +162,16 @@ class ChatService:
             category=ProviderErrorCategory.TIMEOUT,
             message="The request deadline expired before provider execution.",
         )
+
+    @staticmethod
+    def _update_execution_metadata(context, attempt_count, provider_id, model_id, fallback_used):
+        if context.execution_metadata is not None:
+            context.execution_metadata.update(
+                attempt_count=attempt_count,
+                provider_id=provider_id,
+                model_id=model_id,
+                fallback_used=fallback_used,
+            )
 
     def _provider_request(self, request, required_capabilities, model, context):
         return ProviderChatRequest(

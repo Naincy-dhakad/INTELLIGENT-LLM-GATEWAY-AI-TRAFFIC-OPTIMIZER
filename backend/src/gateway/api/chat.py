@@ -15,6 +15,7 @@ from gateway.api.schemas import (
 from gateway.application.chat_service import ChatExecutionResult, ChatService
 from gateway.application.context import RequestContext
 from gateway.application.rate_limiting import RateLimitUnavailable
+from gateway.application.usage_tracking import record_success
 from gateway.domain.provider import ProviderError, ProviderErrorCategory
 from gateway.domain.routing import RoutingError, RoutingErrorCategory
 
@@ -108,6 +109,7 @@ def _provider_error(error: ProviderError) -> GatewayAPIError:
         message="The provider could not complete the request.",
         status_code=status_code,
         retryable=retryable,
+        internal_error_category=error.category.value,
     )
 
 
@@ -248,18 +250,23 @@ def chat(
 
     timeout_ms = body.timeout_ms or header_timeout or DEFAULT_TIMEOUT_MS
     started = time.perf_counter()
+    execution_metadata: dict[str, object] = {}
     context = RequestContext(
         request_id=request.state.request_id,
         timeout_ms=timeout_ms,
         deadline_monotonic=started + (timeout_ms / 1000),
+        execution_metadata=execution_metadata,
     )
     try:
         execution = service.complete(body, context)
     except RoutingError as error:
+        request.state.usage_execution = execution_metadata
         raise _routing_error(error) from error
     except ProviderError as error:
+        request.state.usage_execution = execution_metadata
         raise _provider_error(error) from error
     except LookupError as error:
+        request.state.usage_execution = execution_metadata
         raise GatewayAPIError(
             code="all_providers_unavailable",
             message="No provider is available for this request.",
@@ -267,4 +274,10 @@ def chat(
             retryable=True,
         ) from error
     latency_ms = round((time.perf_counter() - started) * 1000)
+    record_success(
+        request,
+        execution,
+        latency_ms,
+        body.routing.objective if body.routing else "balanced",
+    )
     return _to_api_response(execution, context.request_id, latency_ms)

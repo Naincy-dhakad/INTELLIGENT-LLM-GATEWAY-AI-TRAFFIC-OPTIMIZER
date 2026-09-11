@@ -8,3 +8,4 @@ class RequestContext:
     request_id: str
     timeout_ms: int
     deadline_monotonic: float
+    execution_metadata: dict[str, object] | None = None

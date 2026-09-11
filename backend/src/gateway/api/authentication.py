@@ -56,4 +56,7 @@ class GatewayAuthenticator:
 
 def require_gateway_auth(request: Request) -> AuthenticatedPrincipal | None:
     authenticator: GatewayAuthenticator = request.app.state.gateway_authenticator
-    return authenticator.authenticate(request.headers.get("X-API-Key"))
+    principal = authenticator.authenticate(request.headers.get("X-API-Key"))
+    if principal is not None:
+        request.state.authenticated_principal = principal
+    return principal

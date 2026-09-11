@@ -146,6 +146,7 @@ Redis is an ephemeral acceleration and coordination layer for:
 
 - short-lived provider health/circuit-breaker state
 - gateway rate-limit counters; Phase 15 uses an atomic fixed-window counter keyed by a hashed authenticated principal
+- normalized durable usage records in PostgreSQL; Phase 16 uses an explicit SQLAlchemy repository and Alembic-managed schema
 - bounded TTL caches for safe, explicitly approved reads
 - short-lived distributed coordination where needed
 

@@ -13,6 +13,7 @@ from gateway.api.health import router as health_router
 from gateway.api.middleware import RequestIDMiddleware
 from gateway.application.chat_service import ChatService
 from gateway.application.rate_limiting import DisabledRateLimiter
+from gateway.application.usage_tracking import UsageRecorder
 from gateway.config.settings import get_settings
 from gateway.domain.provider_registry import ProviderRegistry
 from gateway.infrastructure.providers.anthropic import AnthropicProvider
@@ -21,6 +22,11 @@ from gateway.infrastructure.providers.mock import MockProvider
 from gateway.infrastructure.providers.ollama import OllamaProvider
 from gateway.infrastructure.providers.openai import OpenAIProvider
 from gateway.infrastructure.rate_limiter import RedisRateLimiter
+
+
+class _UnavailableUsageRepository:
+    def record_usage(self, _record) -> None:
+        raise RuntimeError("usage repository unavailable")
 
 
 def create_app() -> FastAPI:
@@ -36,6 +42,20 @@ def create_app() -> FastAPI:
         RedisRateLimiter(settings.redis_url)
         if settings.rate_limit_enabled
         else DisabledRateLimiter()
+    )
+    usage_repository = None
+    if settings.usage_tracking_enabled:
+        try:
+            from gateway.infrastructure.database.repositories import SqlAlchemyUsageRecordRepository
+            from gateway.infrastructure.database.session import create_session_factory
+
+            usage_repository = SqlAlchemyUsageRecordRepository(
+                create_session_factory(settings.database_url)
+            )
+        except Exception:
+            usage_repository = _UnavailableUsageRepository()
+    app.state.usage_recorder = UsageRecorder(
+        usage_repository, settings.usage_tracking_enabled
     )
     app.add_middleware(RequestIDMiddleware)
     app.add_exception_handler(GatewayAPIError, gateway_error_handler)

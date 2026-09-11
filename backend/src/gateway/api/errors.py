@@ -5,6 +5,8 @@ from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from gateway.application.usage_tracking import record_error
+
 
 @dataclass
 class GatewayAPIError(Exception):
@@ -14,6 +16,7 @@ class GatewayAPIError(Exception):
     retryable: bool = False
     details: dict[str, Any] | None = None
     headers: dict[str, str] | None = None
+    internal_error_category: str | None = None
 
 
 def error_payload(
@@ -36,6 +39,9 @@ def error_payload(
 
 
 def gateway_error_handler(request: Request, exc: GatewayAPIError) -> JSONResponse:
+    record_error(
+        request, exc.code, exc.status_code, exc.message, exc.internal_error_category
+    )
     return JSONResponse(
         status_code=exc.status_code,
         content=error_payload(
@@ -55,6 +61,7 @@ def gateway_error_handler(request: Request, exc: GatewayAPIError) -> JSONRespons
 def internal_error_handler(request: Request, exc: Exception) -> JSONResponse:
     """Return a safe envelope without serializing the unexpected exception."""
     _ = exc
+    record_error(request, "internal_error", 500, "The gateway encountered an internal error.")
     return JSONResponse(
         status_code=500,
         content=error_payload(
@@ -69,6 +76,7 @@ def internal_error_handler(request: Request, exc: Exception) -> JSONResponse:
 def validation_error_handler(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
+    record_error(request, "invalid_request", 400, "The request body or headers are invalid.")
     # Validation locations/types are safe and useful; raw input is intentionally omitted.
     details = {"field_count": len(exc.errors())}
     return JSONResponse(
