@@ -13,6 +13,7 @@ from gateway.api.health import router as health_router
 from gateway.api.middleware import RequestIDMiddleware
 from gateway.application.budget import BudgetService
 from gateway.application.chat_service import ChatService
+from gateway.application.observability import NoopObservability, ObservabilityPort
 from gateway.application.rate_limiting import DisabledRateLimiter
 from gateway.application.usage_tracking import UsageRecorder
 from gateway.config.settings import get_settings
@@ -30,8 +31,9 @@ class _UnavailableUsageRepository:
         raise RuntimeError("usage repository unavailable")
 
 
-def create_app() -> FastAPI:
+def create_app(observability: ObservabilityPort | None = None) -> FastAPI:
     settings = get_settings()
+    observability = observability or NoopObservability()
     app = FastAPI(title=settings.app_name, version="0.1.0")
     app.state.gateway_authenticator = GatewayAuthenticator(
         settings.gateway_auth_enabled, settings.gateway_api_keys
@@ -61,7 +63,11 @@ def create_app() -> FastAPI:
     app.state.budget_service = BudgetService(
         usage_repository, settings.usage_tracking_enabled
     )
-    app.add_middleware(RequestIDMiddleware)
+    app.add_middleware(
+        RequestIDMiddleware,
+        observability=observability,
+        environment=settings.app_env,
+    )
     app.add_exception_handler(GatewayAPIError, gateway_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.add_exception_handler(Exception, internal_error_handler)

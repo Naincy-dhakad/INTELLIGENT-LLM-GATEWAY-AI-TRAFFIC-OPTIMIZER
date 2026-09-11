@@ -88,3 +88,7 @@ The project deliberately keeps provider adapters, gateway authentication, routin
 ### Phase 18 observability foundation
 
 The gateway includes a dependency-free application observability port with normalized, request-correlated event types, a no-op implementation, bounded in-memory metrics for tests, and a standard-library structured logging adapter. The event schema excludes prompts, completions, credentials, API keys, authorization values, provider-native errors, and infrastructure URLs. Full lifecycle instrumentation, external metrics/tracing, `/metrics`, and `/ready` are intentionally deferred.
+
+### Phase 18 lifecycle instrumentation
+
+The gateway now emits safe `gateway_request_started` and `gateway_request_completed` events through the application observability port. Events reuse the existing request ID and measure total duration with a monotonic clock. Feature-specific events, external metrics/tracing, `/metrics`, and `/ready` remain deferred.

@@ -315,3 +315,7 @@ Capability values are eligibility requirements, not quality claims. The vocabula
 ## Phase 18 observability foundation
 
 The observability foundation defines an application-level, provider-neutral event and metrics port. Events retain the existing request ID for correlation and accept only bounded operational fields. Prompts, completions, API keys, authorization values, provider-native errors, credentials, and infrastructure URLs are excluded by schema. A no-op implementation supports local development and tests; structured logging uses the standard library. External metrics, tracing, `/metrics`, `/ready`, and full lifecycle instrumentation are intentionally deferred.
+
+## Phase 18 lifecycle instrumentation
+
+The gateway lifecycle now emits normalized `gateway_request_started` and `gateway_request_completed` events through the application observability port. Both events use the existing request ID; completion latency uses a monotonic clock. Event emission is best-effort and cannot change client-visible behavior. Authentication, rate-limit, classification, budget, routing, provider, retry, fallback, metrics endpoint, readiness endpoint, and tracing instrumentation remain deferred to later Phase 18 steps.

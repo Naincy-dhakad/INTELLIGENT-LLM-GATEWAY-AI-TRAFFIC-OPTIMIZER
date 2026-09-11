@@ -63,7 +63,7 @@ _ALLOWED_FIELDS: dict[EventType, frozenset[str]] = {
     EventType.PROVIDER_ATTEMPT: frozenset({"provider_id", "model_id", "attempt_number", "attempt_role", "outcome", "error_category", "latency_ms", "timeout_ms"}),
     EventType.RETRY_SCHEDULED: frozenset({"provider_id", "model_id", "attempt_number", "error_category", "delay_ms"}),
     EventType.FALLBACK_SELECTED: frozenset({"from_provider_id", "from_model_id", "to_provider_id", "to_model_id", "reason_code", "attempt_number"}),
-    EventType.REQUEST_COMPLETED: frozenset({"outcome", "status_code", "provider_id", "model_id", "attempt_count", "fallback_used", "latency_ms", "error_code"}),
+    EventType.REQUEST_COMPLETED: frozenset({"route", "outcome", "status_code", "provider_id", "model_id", "attempt_count", "fallback_used", "latency_ms", "error_code"}),
     EventType.USAGE_PERSISTENCE_FAILED: frozenset({"outcome", "error_category"}),
 }
 
