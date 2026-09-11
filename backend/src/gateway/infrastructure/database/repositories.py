@@ -1,3 +1,6 @@
+from decimal import Decimal
+
+from sqlalchemy import func, select
 from sqlalchemy.orm import sessionmaker
 
 from gateway.application.usage_tracking import UsageRecord
@@ -35,3 +38,11 @@ class SqlAlchemyUsageRecordRepository:
         )
         with self._session_factory.begin() as session:
             session.add(model)
+
+    def get_accumulated_spend(self, principal_id: str) -> Decimal:
+        statement = select(
+            func.coalesce(func.sum(GatewayUsageRecordModel.estimated_cost_usd), 0)
+        ).where(GatewayUsageRecordModel.principal_id == principal_id)
+        with self._session_factory() as session:
+            value = session.execute(statement).scalar_one()
+        return Decimal(value)

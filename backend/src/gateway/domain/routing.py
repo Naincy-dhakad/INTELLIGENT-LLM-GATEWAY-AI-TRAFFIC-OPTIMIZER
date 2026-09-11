@@ -31,6 +31,9 @@ class RoutingErrorCategory(StrEnum):
     LATENCY_LIMIT_EXCEEDED = "latency_limit_exceeded"
     QUALITY_UNAVAILABLE = "quality_unavailable"
     PROVIDER_UNHEALTHY = "provider_unhealthy"
+    BUDGET_UNAVAILABLE = "budget_unavailable"
+    BUDGET_EXHAUSTED = "budget_exhausted"
+    BUDGET_LIMIT_EXCEEDED = "budget_limit_exceeded"
 
 
 @dataclass(frozen=True)
@@ -54,6 +57,8 @@ class RoutingRequest:
     token_estimate: TokenEstimate | None = None
     max_cost_usd: Decimal | None = None
     max_latency_ms: int | None = None
+    max_budget_usd: Decimal | None = None
+    historical_spend_usd: Decimal | None = None
 
 
 @dataclass(frozen=True)
@@ -124,7 +129,8 @@ class DeterministicRoutingPolicy:
     COST_POLICY_VERSION = "classification-cost-v1"
     LATENCY_POLICY_VERSION = "classification-cost-latency-v1"
     QUALITY_POLICY_VERSION = "classification-cost-latency-quality-v1"
-    SUPPORTED_OBJECTIVES = frozenset({"balanced", "cost", "latency", "quality"})
+    BUDGET_POLICY_VERSION = "classification-cost-latency-quality-budget-v1"
+    SUPPORTED_OBJECTIVES = frozenset({"balanced", "cost", "latency", "quality", "budget"})
     _DEFAULT_PROVIDER_BONUS = 5
     _CATEGORY_CAPABILITY_BONUS = 20
     _COMPLEXITY_CAPABILITY_BONUS = 10
@@ -141,6 +147,10 @@ class DeterministicRoutingPolicy:
                 RoutingErrorCategory.UNSUPPORTED_OBJECTIVE,
                 "The requested routing objective is not supported yet.",
             )
+        if request.objective == "budget" and request.max_budget_usd is None:
+            raise RoutingError(RoutingErrorCategory.BUDGET_UNAVAILABLE, "A budget is required for budget routing.")
+        if request.max_budget_usd is not None and request.historical_spend_usd is None:
+            raise RoutingError(RoutingErrorCategory.BUDGET_UNAVAILABLE, "Historical usage is unavailable for budget routing.")
 
         constrained = tuple(
             candidate
@@ -169,8 +179,8 @@ class DeterministicRoutingPolicy:
             raise RoutingError(RoutingErrorCategory.NO_ELIGIBLE_PROVIDER, "No configured provider satisfies the request.")
         eligible = health_eligible
 
-        needs_constraints = request.max_cost_usd is not None or request.max_latency_ms is not None
-        if request.objective in {"cost", "latency", "quality"} or needs_constraints:
+        needs_constraints = request.max_cost_usd is not None or request.max_latency_ms is not None or request.max_budget_usd is not None
+        if request.objective in {"cost", "latency", "quality", "budget"} or needs_constraints:
             models = self._constrained_models(request, eligible)
             winner = self._select_models(request, models, default_provider_id)
             policy_version = self._policy_version(request)
@@ -190,6 +200,11 @@ class DeterministicRoutingPolicy:
                 reason = (
                     f'Provider "{winner.candidate.provider_id}" model "{winner.model_id}" selected '
                     "because it has the highest configured health score among eligible candidates."
+                )
+            elif request.objective == "budget":
+                reason = (
+                    f'Provider "{winner.candidate.provider_id}" model "{winner.model_id}" selected '
+                    "as the lowest estimated-cost route within the remaining budget."
                 )
             else:
                 reason = self._reason(request, winner.candidate, self._preference_score(request, winner.candidate, default_provider_id), default_provider_id)
@@ -280,6 +295,16 @@ class DeterministicRoutingPolicy:
             if not models:
                 raise RoutingError(RoutingErrorCategory.LATENCY_LIMIT_EXCEEDED, "No eligible candidate satisfies the configured latency ceiling.")
 
+        if request.max_budget_usd is not None:
+            remaining = request.max_budget_usd - request.historical_spend_usd
+            known = tuple(item for item in models if item.estimated_cost is not None)
+            if not known:
+                raise RoutingError(RoutingErrorCategory.BUDGET_UNAVAILABLE, "No eligible candidate has a usable estimated cost for this budget.")
+            models = [item for item in known if item.estimated_cost <= remaining]
+            if not models:
+                category = RoutingErrorCategory.BUDGET_EXHAUSTED if remaining < 0 else RoutingErrorCategory.BUDGET_LIMIT_EXCEEDED
+                raise RoutingError(category, "No eligible route fits within the remaining budget.")
+
         if not models:
             if request.objective == "cost":
                 raise RoutingError(RoutingErrorCategory.COST_UNAVAILABLE, "No eligible candidate has configured pricing for cost routing.")
@@ -303,6 +328,11 @@ class DeterministicRoutingPolicy:
             if not usable:
                 raise RoutingError(RoutingErrorCategory.LATENCY_UNAVAILABLE, "No eligible candidate has configured latency for latency routing.")
             return min(usable, key=lambda item: (item.estimated_latency_ms, item.candidate.provider_id, item.model_id))
+        if request.objective == "budget":
+            usable = [item for item in models if item.estimated_cost is not None]
+            if not usable:
+                raise RoutingError(RoutingErrorCategory.BUDGET_UNAVAILABLE, "No eligible candidate has configured pricing for budget routing.")
+            return min(usable, key=lambda item: (item.estimated_cost, item.candidate.provider_id, item.model_id))
         return min(
             models,
             key=lambda item: (
@@ -354,6 +384,8 @@ class DeterministicRoutingPolicy:
         return tuple((item.candidate, item.model_id) for item in sorted(models, key=key))
 
     def _policy_version(self, request: RoutingRequest) -> str:
+        if request.objective == "budget" or request.max_budget_usd is not None:
+            return self.BUDGET_POLICY_VERSION
         if request.objective == "quality":
             return self.QUALITY_POLICY_VERSION
         if request.objective == "latency" or request.max_latency_ms is not None:

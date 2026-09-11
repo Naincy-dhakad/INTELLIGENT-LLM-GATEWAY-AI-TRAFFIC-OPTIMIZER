@@ -86,6 +86,11 @@ class ChatService:
                 request.routing.max_latency_ms
                 if request.routing and request.routing.max_latency_ms is not None else None
             ),
+            max_budget_usd=(
+                request.routing.max_budget_usd
+                if request.routing and request.routing.max_budget_usd is not None else None
+            ),
+            historical_spend_usd=context.historical_spend_usd,
         )
         candidates = tuple(
             RoutingCandidate.from_metadata(provider.metadata)

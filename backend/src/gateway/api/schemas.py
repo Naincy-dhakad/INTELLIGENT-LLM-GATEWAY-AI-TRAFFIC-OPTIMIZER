@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
@@ -41,10 +42,11 @@ class Requirements(StrictModel):
 
 
 class RoutingOptions(StrictModel):
-    objective: Literal["quality", "latency", "cost", "balanced"] = "balanced"
+    objective: Literal["quality", "latency", "cost", "balanced", "budget"] = "balanced"
     max_cost_usd: Annotated[
         float, Field(ge=0, le=1_000_000, allow_inf_nan=False)
     ] | None = None
+    max_budget_usd: Annotated[Decimal, Field(ge=0, le=1_000_000)] | None = None
     max_latency_ms: Annotated[int, Field(gt=0, le=120_000)] | None = None
 
 

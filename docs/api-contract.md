@@ -26,7 +26,7 @@ The health endpoint from Phase 1 remains `GET /health`; it is an operational pro
 
 Submits one normalized, non-streaming chat request. The endpoint accepts a provider/model-neutral request and returns a provider-neutral response. It does not expose any provider's native request or response schema.
 
-The Phase 16 implementation exposes this contract through one provider-neutral abstraction with hardened validation, deterministic classification-aware routing, normalized cost/latency/health policy, deadline-aware retry, bounded fallback, optional gateway API-key authentication, gateway-level Redis-backed rate limiting, and optional PostgreSQL usage persistence. Redis stores only ephemeral fixed-window coordination state; PostgreSQL stores normalized durable usage records when explicitly enabled. The deterministic mock provider and configured OpenAI, Anthropic, Gemini, and Ollama adapters all translate to normalized provider models. Authorization, budgets, and usage APIs remain outside this phase.
+The Phase 17 implementation exposes this contract through one provider-neutral abstraction with hardened validation, deterministic classification-aware routing, normalized cost/latency/health policy, deadline-aware retry, bounded fallback, optional gateway API-key authentication, gateway-level Redis-backed rate limiting, optional PostgreSQL usage persistence, and bounded budget-aware routing. Redis stores only ephemeral fixed-window coordination state; PostgreSQL stores normalized durable usage records and historical spend when explicitly enabled. The deterministic mock provider and configured OpenAI, Anthropic, Gemini, and Ollama adapters all translate to normalized provider models. Authorization, usage APIs, dashboards, and optimization recommendations remain outside this phase.
 
 ### Request classification (Phase 8)
 
@@ -90,6 +90,10 @@ When `RATE_LIMIT_ENABLED=true`, authentication must also be enabled. Each authen
 `USAGE_TRACKING_ENABLED` is disabled by default. When enabled, PostgreSQL stores one normalized `gateway_usage_records` row per gateway request, including outcome, request ID, safe principal ID when available, final provider/model, attempt and fallback metadata, routing/classification fields, normalized cost, token usage when supplied, and latency. Raw prompts, completions, API keys, authorization headers, provider credentials, raw provider errors, and stack traces are never stored. Rate-limited, validation, authentication, and provider failures may be recorded with nullable execution fields.
 
 Usage persistence is internal and adds no client-facing usage endpoint or response fields. Each record is written transactionally and best-effort: a PostgreSQL failure is safely logged and never replaces the original gateway response or provider error. Alembic migrations are the schema source of truth; Redis remains ephemeral and is not used for durable usage records.
+
+### Budget-aware routing (Phase 17)
+
+A request may supply `routing.max_budget_usd` and use the `budget` objective. The value is a non-negative Decimal-safe request budget. PostgreSQL is the durable source of historical estimated spend for the authenticated principal; if usage tracking or historical spend is unavailable, routing fails safely with `503 budget_unavailable` rather than treating spend as zero. The gateway computes `remaining_budget = max_budget_usd - accumulated_spend` and permits only candidates whose existing Phase 10 estimated request cost is less than or equal to the remaining amount. Exact equality is allowed. `budget_exhausted` and `budget_limit_exceeded` are non-retryable `422` policy errors. Existing provider, model, capability, cost, latency, health, and explicit-provider constraints remain authoritative. Budget lookup is application infrastructure and does not create extra usage records or query history during ordinary routing.
 
 ## 3. Request schema
 

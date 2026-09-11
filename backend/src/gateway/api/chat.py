@@ -12,6 +12,7 @@ from gateway.api.schemas import (
     ResponseMessage,
     RoutingMetadata,
 )
+from gateway.application.budget import BudgetUnavailable
 from gateway.application.chat_service import ChatExecutionResult, ChatService
 from gateway.application.context import RequestContext
 from gateway.application.rate_limiting import RateLimitUnavailable
@@ -162,6 +163,17 @@ def _routing_error(error: RoutingError) -> GatewayAPIError:
             message="The requested provider is unavailable for routing.",
             status_code=422,
         )
+    if error.category in {
+        RoutingErrorCategory.BUDGET_UNAVAILABLE,
+        RoutingErrorCategory.BUDGET_EXHAUSTED,
+        RoutingErrorCategory.BUDGET_LIMIT_EXCEEDED,
+    }:
+        return GatewayAPIError(
+            code=error.category.value,
+            message="No eligible route satisfies the configured budget.",
+            status_code=503 if error.category is RoutingErrorCategory.BUDGET_UNAVAILABLE else 422,
+            retryable=error.category is RoutingErrorCategory.BUDGET_UNAVAILABLE,
+        )
     if error.category is RoutingErrorCategory.UNSUPPORTED_OBJECTIVE:
         return GatewayAPIError(
             code="invalid_request",
@@ -248,6 +260,20 @@ def chat(
             status_code=501,
         )
 
+    budget_snapshot = None
+    configured_budget = body.routing.max_budget_usd if body.routing else None
+    if configured_budget is not None:
+        try:
+            principal_id = _principal.key_id if _principal is not None else None
+            budget_snapshot = request.app.state.budget_service.snapshot(principal_id, configured_budget)
+        except BudgetUnavailable as exc:
+            raise GatewayAPIError(
+                code="budget_unavailable",
+                message="Budget information is temporarily unavailable.",
+                status_code=503,
+                retryable=True,
+            ) from exc
+
     timeout_ms = body.timeout_ms or header_timeout or DEFAULT_TIMEOUT_MS
     started = time.perf_counter()
     execution_metadata: dict[str, object] = {}
@@ -256,6 +282,9 @@ def chat(
         timeout_ms=timeout_ms,
         deadline_monotonic=started + (timeout_ms / 1000),
         execution_metadata=execution_metadata,
+        principal_id=_principal.key_id if _principal is not None else None,
+        budget_usd=budget_snapshot.configured_budget_usd if budget_snapshot else None,
+        historical_spend_usd=budget_snapshot.historical_spend_usd if budget_snapshot else None,
     )
     try:
         execution = service.complete(body, context)

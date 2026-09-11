@@ -11,6 +11,7 @@ from gateway.api.errors import (
 )
 from gateway.api.health import router as health_router
 from gateway.api.middleware import RequestIDMiddleware
+from gateway.application.budget import BudgetService
 from gateway.application.chat_service import ChatService
 from gateway.application.rate_limiting import DisabledRateLimiter
 from gateway.application.usage_tracking import UsageRecorder
@@ -55,6 +56,9 @@ def create_app() -> FastAPI:
         except Exception:
             usage_repository = _UnavailableUsageRepository()
     app.state.usage_recorder = UsageRecorder(
+        usage_repository, settings.usage_tracking_enabled
+    )
+    app.state.budget_service = BudgetService(
         usage_repository, settings.usage_tracking_enabled
     )
     app.add_middleware(RequestIDMiddleware)

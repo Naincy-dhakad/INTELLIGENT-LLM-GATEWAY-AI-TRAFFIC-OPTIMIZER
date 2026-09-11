@@ -4,7 +4,7 @@ Production-oriented portfolio project for an LLM gateway, policy-driven traffic 
 
 ## Project status
 
-**Phase 16 — PostgreSQL durable usage tracking complete.** Gateway-level fixed-window rate limiting remains Redis-backed and ephemeral. Optional PostgreSQL usage persistence stores one normalized record per gateway request without prompts, completions, credentials, or raw keys. Budgets, dashboards, caching, and deployment remain outside this phase.
+**Phase 17 — Budget-aware deterministic routing complete.** Gateway-level budgets use authenticated-principal usage totals from optional PostgreSQL durable usage tracking and the existing Decimal cost estimator. Redis remains ephemeral. Dashboards, caching, optimization recommendations, and deployment remain outside this phase.
 
 - [Architecture freeze](docs/architecture-freeze.md): source of truth for system and implementation boundaries.
 - [Gateway API contract](docs/api-contract.md): versioned `/api/v1` contract and provider-neutral boundary.
