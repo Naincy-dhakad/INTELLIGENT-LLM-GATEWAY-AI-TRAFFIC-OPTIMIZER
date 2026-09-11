@@ -26,7 +26,7 @@ The health endpoint from Phase 1 remains `GET /health`; it is an operational pro
 
 Submits one normalized, non-streaming chat request. The endpoint accepts a provider/model-neutral request and returns a provider-neutral response. It does not expose any provider's native request or response schema.
 
-The Phase 14 implementation exposes this contract through one provider-neutral abstraction with hardened validation, deterministic classification-aware routing, normalized cost/latency/health policy, deadline-aware retry, bounded fallback, and optional gateway API-key authentication. The deterministic mock provider and configured OpenAI, Anthropic, Gemini, and Ollama adapters all translate to normalized provider models. Authorization, rate limiting, persistence, and usage tracking remain outside this phase.
+The Phase 15 implementation exposes this contract through one provider-neutral abstraction with hardened validation, deterministic classification-aware routing, normalized cost/latency/health policy, deadline-aware retry, bounded fallback, optional gateway API-key authentication, and gateway-level Redis-backed rate limiting. Redis stores only ephemeral fixed-window coordination state. The deterministic mock provider and configured OpenAI, Anthropic, Gemini, and Ollama adapters all translate to normalized provider models. Authorization, persistence, and usage tracking remain outside this phase.
 
 ### Request classification (Phase 8)
 
@@ -80,6 +80,10 @@ A client should set its HTTP transport timeout greater than the requested gatewa
 Gateway authentication is controlled by `GATEWAY_AUTH_ENABLED` and is disabled by default for local mock development. When enabled, `POST /api/v1/chat` requires `X-API-Key`. Missing, empty, and invalid keys all return HTTP `401` with the normalized `authentication_required` envelope, `retryable: false`, and the request ID. The public message does not reveal whether a key matched or how keys are configured. `GET /health` remains public.
 
 Configured gateway key values are converted to one-way SHA-256 verification material at application startup and checked with constant-time comparison. Keys are never placed in request bodies, query parameters, provider request objects, routing metadata, logs, error details, or responses. Gateway caller keys are separate from `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, and `OLLAMA_BASE_URL`; provider credentials remain owned by provider adapters. Authentication runs before classification, routing, retry, fallback, and provider execution.
+
+### Gateway rate limiting (Phase 15)
+
+When `RATE_LIMIT_ENABLED=true`, authentication must also be enabled. Each authenticated principal gets a deterministic fixed-window quota configured by `RATE_LIMIT_REQUESTS` and `RATE_LIMIT_WINDOW_SECONDS`; the default is 60 requests per 60 seconds. Redis is used only as ephemeral coordination, with an atomic increment/expiration operation. The rate-limit check runs after authentication and before request validation, classification, routing, or provider execution. Exceeding the quota returns `429 rate_limited` and may include a safe `Retry-After` header. If Redis is unavailable, the gateway fails closed with `503 rate_limit_unavailable`. Rate limiting is disabled by default and never applies to public `GET /health`.
 
 ## 3. Request schema
 
@@ -219,7 +223,8 @@ This is an example only. `message` is safe for clients and must not contain stac
 | `408` | `client_timeout` | The client-side deadline was already exceeded or the client cancelled before completion. | Depends on caller semantics. |
 | `422` | `unsupported_capability` | No eligible model satisfies a declared hard capability or generation requirement. | No unless requirements change. |
 | `422` | `model_not_supported` | The explicitly selected provider does not advertise the requested model. | No unless the model or provider changes. |
-| `429` | `rate_limited` | Gateway or provider rate limit was reached. | Yes, after `Retry-After` when present. |
+| `429` | `rate_limited` | The authenticated gateway principal exceeded the configured Redis-backed request window. | Yes, after `Retry-After` when present. |
+| `503` | `rate_limit_unavailable` | Gateway rate limiting is enabled but its Redis coordination operation failed. | Yes, after the gateway is available. |
 | `502` | `provider_error` | An eligible provider returned a non-transient or unmappable failure. | Usually no; policy may classify a specific case differently. |
 | `503` | `all_providers_unavailable` | No eligible provider can currently serve the request, including permitted fallback candidates. | Yes, with backoff. |
 | `504` | `gateway_timeout` | The gateway deadline expired before a complete response. | Yes only if caller has a new deadline; fallback stops for the expired request. |

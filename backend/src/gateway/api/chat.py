@@ -14,6 +14,7 @@ from gateway.api.schemas import (
 )
 from gateway.application.chat_service import ChatExecutionResult, ChatService
 from gateway.application.context import RequestContext
+from gateway.application.rate_limiting import RateLimitUnavailable
 from gateway.domain.provider import ProviderError, ProviderErrorCategory
 from gateway.domain.routing import RoutingError, RoutingErrorCategory
 
@@ -24,6 +25,45 @@ MAX_TIMEOUT_MS = 120_000
 
 def get_chat_service(request: Request) -> ChatService:
     return request.app.state.chat_service
+
+
+def require_rate_limit(
+    request: Request,
+    principal: AuthenticatedPrincipal | None = Depends(require_gateway_auth),
+) -> None:
+    if not request.app.state.rate_limit_enabled:
+        return
+    if principal is None:
+        raise GatewayAPIError(
+            code="rate_limit_unavailable",
+            message="Gateway rate limiting is temporarily unavailable.",
+            status_code=503,
+            retryable=True,
+        )
+    try:
+        result = request.app.state.rate_limiter.check_and_consume(
+            principal.key_id,
+            request.app.state.rate_limit_requests,
+            request.app.state.rate_limit_window_seconds,
+        )
+    except RateLimitUnavailable as exc:
+        raise GatewayAPIError(
+            code="rate_limit_unavailable",
+            message="Gateway rate limiting is temporarily unavailable.",
+            status_code=503,
+            retryable=True,
+        ) from exc
+    if not result.allowed:
+        headers = {}
+        if result.retry_after_seconds is not None:
+            headers["Retry-After"] = str(result.retry_after_seconds)
+        raise GatewayAPIError(
+            code="rate_limited",
+            message="The gateway request limit has been exceeded.",
+            status_code=429,
+            retryable=True,
+            headers=headers or None,
+        )
 
 
 def _header_timeout(request: Request) -> int | None:
@@ -188,6 +228,7 @@ def chat(
     request: Request,
     body: ChatRequest,
     _principal: AuthenticatedPrincipal | None = Depends(require_gateway_auth),
+    _rate_limit: None = Depends(require_rate_limit),
     service: ChatService = Depends(get_chat_service),
 ) -> ChatResponse:
     header_timeout = _header_timeout(request)

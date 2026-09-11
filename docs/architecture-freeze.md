@@ -145,7 +145,7 @@ Raw prompts, completions, and tool payloads are **not stored by default**. If fu
 Redis is an ephemeral acceleration and coordination layer for:
 
 - short-lived provider health/circuit-breaker state
-- rate-limit counters and rolling operational signals
+- gateway rate-limit counters; Phase 15 uses an atomic fixed-window counter keyed by a hashed authenticated principal
 - bounded TTL caches for safe, explicitly approved reads
 - short-lived distributed coordination where needed
 

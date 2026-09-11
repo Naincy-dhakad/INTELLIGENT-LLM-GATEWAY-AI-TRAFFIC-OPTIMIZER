@@ -4,7 +4,7 @@ Production-oriented portfolio project for an LLM gateway, policy-driven traffic 
 
 ## Project status
 
-**Phase 14 — Authentication & API Keys complete.** Gateway API-key authentication is available at the API edge while deterministic routing, deadline-aware retry, and bounded fallback remain intact. Redis, PostgreSQL usage tracking, budgets, dashboards, caching, and deployment remain outside this phase.
+**Phase 15 — Redis-backed gateway rate limiting complete.** Gateway-level fixed-window rate limiting runs after API-key authentication and before validation, routing, and provider execution. Redis is ephemeral coordination only; PostgreSQL usage tracking, budgets, dashboards, caching, and deployment remain outside this phase.
 
 - [Architecture freeze](docs/architecture-freeze.md): source of truth for system and implementation boundaries.
 - [Gateway API contract](docs/api-contract.md): versioned `/api/v1` contract and provider-neutral boundary.
@@ -63,7 +63,7 @@ npm run build
 
 ## Environment configuration
 
-Copy `backend/.env.example` to `backend/.env` for local backend configuration. Configure `DEFAULT_PROVIDER_ID` explicitly (`phase3-mock`, `openai`, `anthropic`, `gemini`, or `ollama`). OpenAI, Anthropic, and Gemini require their corresponding provider credentials; Ollama uses optional `OLLAMA_BASE_URL` and `OLLAMA_DEFAULT_MODEL`. Providers with missing configuration are not registered. Gateway authentication is disabled by default (`GATEWAY_AUTH_ENABLED=false`). To enable it locally, set `GATEWAY_AUTH_ENABLED=true` and provide comma-separated development values in `GATEWAY_API_KEYS`; the application hashes these values at startup and never forwards them to providers. Never commit credentials or place them in frontend configuration. Tests use fake clients/transports and do not require provider credentials. Streaming remains unsupported.
+Copy `backend/.env.example` to `backend/.env` for local backend configuration. Configure `DEFAULT_PROVIDER_ID` explicitly (`phase3-mock`, `openai`, `anthropic`, `gemini`, or `ollama`). OpenAI, Anthropic, and Gemini require their corresponding provider credentials; Ollama uses optional `OLLAMA_BASE_URL` and `OLLAMA_DEFAULT_MODEL`. Providers with missing configuration are not registered. Gateway authentication is disabled by default (`GATEWAY_AUTH_ENABLED=false`). To enable it locally, set `GATEWAY_AUTH_ENABLED=true` and provide comma-separated development values in `GATEWAY_API_KEYS`; the application hashes these values at startup and never forwards them to providers. Never commit credentials or place them in frontend configuration. Gateway rate limiting is disabled by default (`RATE_LIMIT_ENABLED=false`) and requires gateway authentication when enabled. It uses Redis only for ephemeral fixed-window counters, fails closed with a safe `503` if Redis is unavailable, and excludes `/health`. Tests use fake clients/transports and do not require provider credentials. Streaming remains unsupported.
 
 ## Project layout
 

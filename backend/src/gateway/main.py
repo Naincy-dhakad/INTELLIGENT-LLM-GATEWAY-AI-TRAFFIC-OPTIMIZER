@@ -12,6 +12,7 @@ from gateway.api.errors import (
 from gateway.api.health import router as health_router
 from gateway.api.middleware import RequestIDMiddleware
 from gateway.application.chat_service import ChatService
+from gateway.application.rate_limiting import DisabledRateLimiter
 from gateway.config.settings import get_settings
 from gateway.domain.provider_registry import ProviderRegistry
 from gateway.infrastructure.providers.anthropic import AnthropicProvider
@@ -19,6 +20,7 @@ from gateway.infrastructure.providers.gemini import GeminiProvider
 from gateway.infrastructure.providers.mock import MockProvider
 from gateway.infrastructure.providers.ollama import OllamaProvider
 from gateway.infrastructure.providers.openai import OpenAIProvider
+from gateway.infrastructure.rate_limiter import RedisRateLimiter
 
 
 def create_app() -> FastAPI:
@@ -26,6 +28,14 @@ def create_app() -> FastAPI:
     app = FastAPI(title=settings.app_name, version="0.1.0")
     app.state.gateway_authenticator = GatewayAuthenticator(
         settings.gateway_auth_enabled, settings.gateway_api_keys
+    )
+    app.state.rate_limit_enabled = settings.rate_limit_enabled
+    app.state.rate_limit_requests = settings.rate_limit_requests
+    app.state.rate_limit_window_seconds = settings.rate_limit_window_seconds
+    app.state.rate_limiter = (
+        RedisRateLimiter(settings.redis_url)
+        if settings.rate_limit_enabled
+        else DisabledRateLimiter()
     )
     app.add_middleware(RequestIDMiddleware)
     app.add_exception_handler(GatewayAPIError, gateway_error_handler)

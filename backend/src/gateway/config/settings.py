@@ -1,7 +1,7 @@
 from decimal import Decimal
 from functools import lru_cache
 
-from pydantic import SecretStr
+from pydantic import SecretStr, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -26,6 +26,18 @@ class Settings(BaseSettings):
     ollama_default_model: str = "llama3.2"
     gateway_auth_enabled: bool = False
     gateway_api_keys: str = ""
+    rate_limit_enabled: bool = False
+    redis_url: str = "redis://localhost:6379/0"
+    rate_limit_requests: int = Field(default=60, gt=0)
+    rate_limit_window_seconds: int = Field(default=60, gt=0)
+
+    @model_validator(mode="after")
+    def rate_limit_requires_authentication(self) -> "Settings":
+        if self.rate_limit_enabled and not self.gateway_auth_enabled:
+            raise ValueError("RATE_LIMIT_ENABLED requires GATEWAY_AUTH_ENABLED")
+        if self.rate_limit_enabled and not self.redis_url.strip():
+            raise ValueError("REDIS_URL is required when rate limiting is enabled")
+        return self
 
     model_config = SettingsConfigDict(
         env_file=".env",

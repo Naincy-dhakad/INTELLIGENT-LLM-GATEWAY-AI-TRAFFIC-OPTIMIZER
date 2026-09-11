@@ -39,9 +39,9 @@ class GatewayAuthenticator:
         if not api_key:
             raise self._failure()
         supplied = self._digest(api_key)
-        for index, expected in enumerate(self._key_hashes):
+        for expected in self._key_hashes:
             if secrets.compare_digest(supplied, expected):
-                return AuthenticatedPrincipal(key_id=f"gateway-key-{index + 1}")
+                return AuthenticatedPrincipal(key_id=expected.hex())
         raise self._failure()
 
     @staticmethod

@@ -13,6 +13,7 @@ class GatewayAPIError(Exception):
     status_code: int
     retryable: bool = False
     details: dict[str, Any] | None = None
+    headers: dict[str, str] | None = None
 
 
 def error_payload(
@@ -44,7 +45,10 @@ def gateway_error_handler(request: Request, exc: GatewayAPIError) -> JSONRespons
             retryable=exc.retryable,
             details=exc.details,
         ),
-        headers={"X-Request-ID": request.state.request_id},
+        headers={
+            "X-Request-ID": request.state.request_id,
+            **(exc.headers or {}),
+        },
     )
 
 
