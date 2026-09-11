@@ -6,6 +6,8 @@ from typing import Callable
 
 from gateway.api.schemas import ChatRequest
 from gateway.application.context import RequestContext
+from gateway.application.observability import EventSink, NoopObservability
+from gateway.application.observability_events import EventType, make_event
 from gateway.application.retry_policy import RetryPolicy
 from gateway.domain.classification import (
     ClassificationMessage,
@@ -49,6 +51,7 @@ class ChatService:
         registry: ProviderRegistry,
         routing_policy: DeterministicRoutingPolicy | None = None,
         classifier: DeterministicRequestClassifier | None = None,
+        observability: EventSink | None = None,
         *,
         clock: Callable[[], float] = time.monotonic,
         sleeper: Callable[[float], None] = time.sleep,
@@ -56,6 +59,7 @@ class ChatService:
         self._registry = registry
         self._routing_policy = routing_policy or DeterministicRoutingPolicy()
         self._classifier = classifier or DeterministicRequestClassifier()
+        self._observability = observability or NoopObservability()
         self._clock = clock
         self._sleeper = sleeper
 
@@ -67,6 +71,7 @@ class ChatService:
         classification = self._classifier.classify(
             tuple(ClassificationMessage(role=m.role, content=m.content) for m in request.messages)
         )
+        self._emit_classification(context, classification)
         token_estimate = estimate_token_counts(
             tuple(CostMessage(message.content) for message in request.messages),
             request.generation.max_output_tokens if request.generation else None,
@@ -167,6 +172,22 @@ class ChatService:
             category=ProviderErrorCategory.TIMEOUT,
             message="The request deadline expired before provider execution.",
         )
+
+    def _emit_classification(self, context: RequestContext, classification: ClassificationResult) -> None:
+        try:
+            self._observability.emit(
+                make_event(
+                    EventType.CLASSIFICATION_COMPLETED,
+                    context.request_id,
+                    category=classification.category.value,
+                    complexity_level=classification.complexity_level.value,
+                    complexity_score=classification.complexity_score,
+                    policy_version=DeterministicRoutingPolicy.POLICY_VERSION,
+                )
+            )
+        except Exception:
+            # Classification output and request behavior must not depend on telemetry.
+            pass
 
     @staticmethod
     def _update_execution_metadata(context, attempt_count, provider_id, model_id, fallback_used):

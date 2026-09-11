@@ -118,7 +118,7 @@ def create_app(observability: ObservabilityPort | None = None) -> FastAPI:
         raise ValueError(
             "DEFAULT_PROVIDER_ID must identify a provider with valid configuration"
         )
-    app.state.chat_service = ChatService(registry)
+    app.state.chat_service = ChatService(registry, observability=observability)
     app.include_router(health_router)
     app.include_router(chat_router)
     return app

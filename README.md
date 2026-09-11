@@ -96,3 +96,7 @@ The gateway now emits safe `gateway_request_started` and `gateway_request_comple
 ### Phase 18 authentication and rate-limit events
 
 The gateway now emits safe `gateway_authentication_result` and `gateway_rate_limit_result` events at the existing API boundaries. Raw credentials, principal identifiers as metric labels, API keys, authorization values, and Redis internals are excluded. Classification, budget, routing, provider, retry, fallback, metrics, readiness, and tracing instrumentation remain deferred.
+
+### Phase 18 classification observability
+
+The gateway emits `gateway_classification_completed` with the normalized category, complexity level, complexity score, policy version, and request ID. Prompts, matched phrases, raw user content, and secrets are never emitted. Budget, routing, provider, retry, and fallback observability remain deferred.

@@ -323,3 +323,7 @@ The gateway lifecycle now emits normalized `gateway_request_started` and `gatewa
 ## Phase 18 authentication and rate-limit observability
 
 Authentication and rate-limit outcomes now emit normalized observability events using the existing request ID. Events use bounded outcomes and route/configuration values only; raw API keys, authorization values, principal identifiers as metric labels, Redis URLs/keys/errors, and provider credentials are never emitted. Authentication and rate-limit behavior is unchanged. Classification, budget, routing, provider, retry, fallback, external metrics, readiness, and tracing instrumentation remain deferred.
+
+## Phase 18 classification observability
+
+The gateway emits `gateway_classification_completed` after the existing deterministic classifier succeeds. The event contains only the normalized category, complexity level, complexity score, policy version, and request ID. Prompts, matched phrases, raw user content, completions, and secrets are never emitted. Budget, routing, provider, retry, and fallback observability remain deferred.
