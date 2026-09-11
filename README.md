@@ -4,7 +4,7 @@ Production-oriented portfolio project for an LLM gateway, policy-driven traffic 
 
 ## Project status
 
-**Phase 13 — Deadline-aware retry and bounded fallback complete.** Balanced, cost-aware, latency-aware, and health-aware deterministic routing remain intact. Provider failures are normalized and may receive one same-provider retry plus one eligible fallback within the original request deadline. Budgets, authentication, database, Redis, streaming, and optimization recommendations remain outside this phase.
+**Phase 14 — Authentication & API Keys complete.** Gateway API-key authentication is available at the API edge while deterministic routing, deadline-aware retry, and bounded fallback remain intact. Redis, PostgreSQL usage tracking, budgets, dashboards, caching, and deployment remain outside this phase.
 
 - [Architecture freeze](docs/architecture-freeze.md): source of truth for system and implementation boundaries.
 - [Gateway API contract](docs/api-contract.md): versioned `/api/v1` contract and provider-neutral boundary.
@@ -63,7 +63,7 @@ npm run build
 
 ## Environment configuration
 
-Copy `backend/.env.example` to `backend/.env` for local backend configuration. Configure `DEFAULT_PROVIDER_ID` explicitly (`phase3-mock`, `openai`, `anthropic`, `gemini`, or `ollama`). OpenAI, Anthropic, and Gemini require their corresponding `*_API_KEY` and `*_DEFAULT_MODEL`; Ollama uses optional `OLLAMA_BASE_URL` and `OLLAMA_DEFAULT_MODEL`. Providers with missing configuration are not registered. Never commit credentials or place them in frontend configuration. Tests use fake clients/transports and do not require provider credentials. Streaming remains unsupported.
+Copy `backend/.env.example` to `backend/.env` for local backend configuration. Configure `DEFAULT_PROVIDER_ID` explicitly (`phase3-mock`, `openai`, `anthropic`, `gemini`, or `ollama`). OpenAI, Anthropic, and Gemini require their corresponding provider credentials; Ollama uses optional `OLLAMA_BASE_URL` and `OLLAMA_DEFAULT_MODEL`. Providers with missing configuration are not registered. Gateway authentication is disabled by default (`GATEWAY_AUTH_ENABLED=false`). To enable it locally, set `GATEWAY_AUTH_ENABLED=true` and provide comma-separated development values in `GATEWAY_API_KEYS`; the application hashes these values at startup and never forwards them to providers. Never commit credentials or place them in frontend configuration. Tests use fake clients/transports and do not require provider credentials. Streaming remains unsupported.
 
 ## Project layout
 
@@ -83,4 +83,4 @@ frontend/
 docs/architecture-freeze.md
 ```
 
-Phase 5 deliberately provides configured provider adapters without implementing routing, persistence, Redis, authentication, authorization, streaming, fallback, or production deployment.
+The project deliberately keeps provider adapters, gateway authentication, routing, persistence, Redis, streaming, fallback, and deployment as separate bounded concerns.

@@ -4,7 +4,7 @@
 **Status:** Ready for implementation in a future phase
 **Scope:** Contract design only. This document does not implement any endpoint.
 
-This is the first public contract for the normalized gateway API. It preserves the Phase 0 modular-monolith and provider-adapter boundaries while leaving routing, provider calls, persistence, Redis, and authentication for later phases.
+This is the public contract for the normalized gateway API. It preserves the Phase 0 modular-monolith and provider-adapter boundaries. Gateway API-key authentication is enforced at the edge when enabled; provider calls, persistence, Redis, and usage tracking remain separate concerns.
 
 ## 1. Versioning
 
@@ -26,7 +26,7 @@ The health endpoint from Phase 1 remains `GET /health`; it is an operational pro
 
 Submits one normalized, non-streaming chat request. The endpoint accepts a provider/model-neutral request and returns a provider-neutral response. It does not expose any provider's native request or response schema.
 
-The Phase 10 implementation exposes this contract through one provider-neutral abstraction with hardened validation, deterministic classification-aware routing, and normalized cost-aware policy. The deterministic mock provider and configured OpenAI, Anthropic, Gemini, and Ollama adapters all translate to normalized provider models. Authentication, authorization, rate limiting, persistence, and fallback remain for later phases.
+The Phase 14 implementation exposes this contract through one provider-neutral abstraction with hardened validation, deterministic classification-aware routing, normalized cost/latency/health policy, deadline-aware retry, bounded fallback, and optional gateway API-key authentication. The deterministic mock provider and configured OpenAI, Anthropic, Gemini, and Ollama adapters all translate to normalized provider models. Authorization, rate limiting, persistence, and usage tracking remain outside this phase.
 
 ### Request classification (Phase 8)
 
@@ -71,9 +71,15 @@ The application calls a provider-neutral `Provider` protocol with normalized `Pr
 | `Content-Type: application/json` | Yes | JSON request body. |
 | `X-Request-ID` | No | Client-supplied correlation ID. If supplied, it must be a bounded printable identifier. The gateway may reject invalid values. If absent, the gateway generates one. This ID is echoed in the response and error body. |
 | `X-Request-Timeout-Ms` | No | Relative timeout hint in milliseconds. Optional alternative to the body `timeout_ms`; sending both is invalid. It is bounded by server policy and does not override the server's maximum deadline. |
-| `Authorization` | Future | Authentication transport is intentionally deferred. When enabled, it will be validated at the edge/backend boundary and will never be forwarded to a provider. |
+| `X-API-Key` | Conditional | When `GATEWAY_AUTH_ENABLED=true`, a valid gateway API key is required. It is validated at the gateway edge and is never forwarded to a provider. |
 
 A client should set its HTTP transport timeout greater than the requested gateway timeout plus network overhead. A client must not treat `X-Request-ID` as an authentication or idempotency credential.
+
+### Gateway authentication (Phase 14)
+
+Gateway authentication is controlled by `GATEWAY_AUTH_ENABLED` and is disabled by default for local mock development. When enabled, `POST /api/v1/chat` requires `X-API-Key`. Missing, empty, and invalid keys all return HTTP `401` with the normalized `authentication_required` envelope, `retryable: false`, and the request ID. The public message does not reveal whether a key matched or how keys are configured. `GET /health` remains public.
+
+Configured gateway key values are converted to one-way SHA-256 verification material at application startup and checked with constant-time comparison. Keys are never placed in request bodies, query parameters, provider request objects, routing metadata, logs, error details, or responses. Gateway caller keys are separate from `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, and `OLLAMA_BASE_URL`; provider credentials remain owned by provider adapters. Authentication runs before classification, routing, retry, fallback, and provider execution.
 
 ## 3. Request schema
 
@@ -208,7 +214,7 @@ This is an example only. `message` is safe for clients and must not contain stac
 | HTTP status | Error code | Meaning | Retry guidance |
 | --- | --- | --- | --- |
 | `400` | `invalid_request` | Malformed JSON, invalid field, conflicting timeout headers/body, or unsupported request value. | No; fix the request. |
-| `401` | `authentication_required` | Authentication is enabled and the request has no valid identity. | No; obtain valid credentials. |
+| `401` | `authentication_required` | Authentication is enabled and `X-API-Key` is missing, empty, or invalid. Missing and invalid keys use the same safe response. | No; obtain valid credentials. |
 | `403` | `not_authorized` | Verified identity cannot use the requested tenant/model/provider/policy. | No unless authorization changes. |
 | `408` | `client_timeout` | The client-side deadline was already exceeded or the client cancelled before completion. | Depends on caller semantics. |
 | `422` | `unsupported_capability` | No eligible model satisfies a declared hard capability or generation requirement. | No unless requirements change. |

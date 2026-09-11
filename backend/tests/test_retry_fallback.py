@@ -126,5 +126,3 @@ def test_injected_sleep_is_bounded_and_request_timeout_shrinks():
     assert result.attempt_count == 2
     assert sleeps == [0.05]
     assert primary.calls[1].timeout_ms <= primary.calls[0].timeout_ms
-
-

@@ -2,6 +2,7 @@ import time
 
 from fastapi import APIRouter, Depends, Request
 
+from gateway.api.authentication import AuthenticatedPrincipal, require_gateway_auth
 from gateway.api.errors import GatewayAPIError
 from gateway.api.schemas import (
     ChatRequest,
@@ -178,6 +179,7 @@ def _to_api_response(
     response_model=ChatResponse,
     responses={
         400: {"model": ErrorResponse},
+        401: {"model": ErrorResponse},
         422: {"model": ErrorResponse},
         501: {"model": ErrorResponse},
     },
@@ -185,6 +187,7 @@ def _to_api_response(
 def chat(
     request: Request,
     body: ChatRequest,
+    _principal: AuthenticatedPrincipal | None = Depends(require_gateway_auth),
     service: ChatService = Depends(get_chat_service),
 ) -> ChatResponse:
     header_timeout = _header_timeout(request)

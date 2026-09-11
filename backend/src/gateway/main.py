@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 
+from gateway.api.authentication import GatewayAuthenticator
 from gateway.api.chat import router as chat_router
 from gateway.api.errors import (
     GatewayAPIError,
@@ -23,6 +24,9 @@ from gateway.infrastructure.providers.openai import OpenAIProvider
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title=settings.app_name, version="0.1.0")
+    app.state.gateway_authenticator = GatewayAuthenticator(
+        settings.gateway_auth_enabled, settings.gateway_api_keys
+    )
     app.add_middleware(RequestIDMiddleware)
     app.add_exception_handler(GatewayAPIError, gateway_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)

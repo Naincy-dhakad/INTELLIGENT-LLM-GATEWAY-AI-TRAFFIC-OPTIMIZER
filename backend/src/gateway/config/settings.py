@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     gemini_default_model: str = "gemini-2.0-flash"
     ollama_base_url: str | None = None
     ollama_default_model: str = "llama3.2"
+    gateway_auth_enabled: bool = False
+    gateway_api_keys: str = ""
 
     model_config = SettingsConfigDict(
         env_file=".env",
