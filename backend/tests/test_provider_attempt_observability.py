@@ -106,6 +106,48 @@ def test_successful_provider_attempt_emits_one_safe_event():
     assert event.attributes["latency_ms"] >= 0
 
 
+def test_retry_scheduled_event_uses_existing_delay_and_reason():
+    collector = Collector()
+    provider = FakeProvider("primary", [error(ProviderErrorCategory.UNAVAILABLE), "success"])
+    result = make_service(provider, collector=collector).complete(request(), context())
+    retries = [e for e in collector.events if e.event_type.value == "gateway_retry_scheduled"]
+    assert result.attempt_count == 2
+    assert len(retries) == 1
+    assert retries[0].request_id == "provider-request"
+    assert retries[0].attributes == {
+        "provider_id": "primary",
+        "model_id": "model",
+        "attempt_number": 1,
+        "error_category": "unavailable",
+        "delay_ms": 50,
+    }
+
+
+def test_non_retryable_failure_does_not_emit_retry_event():
+    collector = Collector()
+    provider = FakeProvider("primary", [error(ProviderErrorCategory.INVALID_REQUEST)])
+    with pytest.raises(ProviderError):
+        make_service(provider, collector=collector).complete(request(), context())
+    assert not [e for e in collector.events if e.event_type.value == "gateway_retry_scheduled"]
+
+
+def test_fallback_selected_event_precedes_fallback_attempt():
+    collector = Collector()
+    primary = FakeProvider("primary", [error(ProviderErrorCategory.UNAVAILABLE), error(ProviderErrorCategory.TIMEOUT)])
+    fallback = FakeProvider("fallback")
+    result = make_service(primary, fallback, collector).complete(request(), context())
+    fallback_events = [e for e in collector.events if e.event_type.value == "gateway_fallback_selected"]
+    attempt_events = [e for e in collector.events if e.event_type.value == "gateway_provider_attempt"]
+    assert result.fallback_used is True
+    assert len(fallback_events) == 1
+    assert fallback_events[0].request_id == "provider-request"
+    assert fallback_events[0].attributes["to_provider_id"] == "fallback"
+    assert fallback_events[0].attributes["to_model_id"] == "model"
+    assert fallback_events[0].attributes["attempt_number"] == 3
+    assert fallback_events[0].attributes["reason_code"] == "timeout"
+    assert collector.events.index(fallback_events[0]) < collector.events.index(attempt_events[-1])
+
+
 def test_provider_failure_emits_normalized_error_only():
     collector = Collector()
     provider = FakeProvider("primary", [error(ProviderErrorCategory.INVALID_REQUEST)])

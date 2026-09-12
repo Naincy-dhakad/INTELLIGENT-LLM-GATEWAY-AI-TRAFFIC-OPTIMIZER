@@ -339,3 +339,7 @@ The gateway emits `gateway_routing_decision` at the existing deterministic routi
 ## Phase 18 provider attempt observability
 
 `gateway_provider_attempt` represents one actual provider execution attempt. Initial calls, retries, and fallback calls each produce their own event with bounded provider/model identifiers, deterministic attempt number and role, outcome, monotonic attempt latency, normalized error category, and timeout. Prompts, completions, credentials, raw provider exceptions, request/response bodies, and arbitrary metadata are never emitted.
+
+## Phase 18 retry and fallback observability
+
+`gateway_retry_scheduled` represents an actually scheduled retry and is emitted after the existing retryability and deadline checks. `gateway_fallback_selected` represents an actually selected fallback immediately before its provider attempt. Both preserve the existing request ID and use only bounded operational fields and normalized error categories/reasons. Prompts, completions, credentials, raw provider exceptions, and arbitrary metadata are never emitted.

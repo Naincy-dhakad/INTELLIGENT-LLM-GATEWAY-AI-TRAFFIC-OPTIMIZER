@@ -150,6 +150,14 @@ class ChatService:
                 delay = RetryPolicy.delay_seconds(retry_number + 1)
                 if self._remaining_seconds(context) <= delay:
                     break
+                self._emit_retry_scheduled(
+                    context.request_id,
+                    decision.selected_provider_id,
+                    decision.selected_model_id,
+                    attempt_count,
+                    error.category.value,
+                    delay,
+                )
                 self._sleeper(delay)
 
         if (
@@ -169,6 +177,15 @@ class ChatService:
                 attempted.add((fallback_candidate.provider_id, fallback_model))
                 fallback_provider = self._registry.get(fallback_candidate.provider_id)
                 if fallback_provider is not None:
+                    self._emit_fallback_selected(
+                        context.request_id,
+                        decision.selected_provider_id,
+                        decision.selected_model_id,
+                        fallback_candidate.provider_id,
+                        fallback_model,
+                        attempt_count + 1,
+                        last_error.category.value,
+                    )
                     attempt_count += 1
                     self._update_execution_metadata(
                         context, attempt_count, fallback_candidate.provider_id,
@@ -192,6 +209,56 @@ class ChatService:
             category=ProviderErrorCategory.TIMEOUT,
             message="The request deadline expired before provider execution.",
         )
+
+    def _emit_retry_scheduled(
+        self,
+        request_id: str,
+        provider_id: str,
+        model_id: str,
+        attempt_number: int,
+        error_category: str,
+        delay_seconds: float,
+    ) -> None:
+        try:
+            self._observability.emit(
+                make_event(
+                    EventType.RETRY_SCHEDULED,
+                    request_id,
+                    provider_id=provider_id,
+                    model_id=model_id,
+                    attempt_number=attempt_number,
+                    error_category=error_category,
+                    delay_ms=round(delay_seconds * 1000),
+                )
+            )
+        except Exception:
+            pass
+
+    def _emit_fallback_selected(
+        self,
+        request_id: str,
+        from_provider_id: str,
+        from_model_id: str,
+        to_provider_id: str,
+        to_model_id: str,
+        attempt_number: int,
+        reason_code: str,
+    ) -> None:
+        try:
+            self._observability.emit(
+                make_event(
+                    EventType.FALLBACK_SELECTED,
+                    request_id,
+                    from_provider_id=from_provider_id,
+                    from_model_id=from_model_id,
+                    to_provider_id=to_provider_id,
+                    to_model_id=to_model_id,
+                    attempt_number=attempt_number,
+                    reason_code=reason_code,
+                )
+            )
+        except Exception:
+            pass
 
     def _emit_provider_attempt(
         self,
