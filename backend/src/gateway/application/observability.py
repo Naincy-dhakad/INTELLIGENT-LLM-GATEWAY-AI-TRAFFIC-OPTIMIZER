@@ -59,10 +59,11 @@ def record_event_metrics(metrics: MetricsSink, event_type: EventType, attributes
         increment = metrics.increment
         observe = metrics.observe
         if event_type is EventType.REQUEST_COMPLETED:
-            increment("gateway_requests_total", labels)
+            request_labels = {key: value for key, value in labels.items() if key in {"route", "outcome", "status_class"}}
+            increment("gateway_requests_total", request_labels)
             latency = attributes.get("latency_ms")
             if isinstance(latency, (int, float)):
-                observe("gateway_request_duration_seconds", latency / 1000, labels)
+                observe("gateway_request_duration_seconds", latency / 1000, request_labels)
             if attributes.get("error_code") is not None:
                 increment("gateway_errors_total", {key: value for key, value in labels.items() if key in {"error_code", "status_class"}})
         elif event_type is EventType.AUTHENTICATION_RESULT:
@@ -76,10 +77,11 @@ def record_event_metrics(metrics: MetricsSink, event_type: EventType, attributes
         elif event_type is EventType.ROUTING_DECISION:
             increment("gateway_routing_decisions_total", {key: value for key, value in labels.items() if key in {"outcome", "objective", "policy_version", "provider_id", "model_id"}})
         elif event_type is EventType.PROVIDER_ATTEMPT:
-            increment("gateway_provider_attempts_total", labels)
+            provider_labels = {key: value for key, value in labels.items() if key in {"provider_id", "model_id", "attempt_role", "outcome"}}
+            increment("gateway_provider_attempts_total", provider_labels)
             latency = attributes.get("latency_ms")
             if isinstance(latency, (int, float)):
-                observe("gateway_provider_attempt_duration_seconds", latency / 1000, labels)
+                observe("gateway_provider_attempt_duration_seconds", latency / 1000, provider_labels)
         elif event_type is EventType.RETRY_SCHEDULED:
             increment("gateway_retries_scheduled_total", {key: value for key, value in labels.items() if key in {"provider_id", "model_id", "error_category", "attempt_number"}})
         elif event_type is EventType.FALLBACK_SELECTED:
