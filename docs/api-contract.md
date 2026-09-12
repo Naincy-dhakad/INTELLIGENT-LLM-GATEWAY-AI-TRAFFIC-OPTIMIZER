@@ -347,3 +347,7 @@ The gateway emits `gateway_routing_decision` at the existing deterministic routi
 ## Phase 18 request validation and error observability
 
 `gateway_request_validation_result` reports successful or rejected API validation with bounded outcome and status fields, plus the existing normalized error code for rejected requests. Completion events preserve normalized gateway error codes without exposing validation details, request bodies, prompts, completions, credentials, or raw exceptions.
+
+## Phase 18 Step 10A metrics foundation
+
+A dependency-free metrics contract now defines bounded counters and histograms for the first-phase catalog. Metric names, labels, sensitive fields, status classes, routes, provider/model identifiers, and histogram buckets are validated centrally. No application metric instrumentation, `/metrics` endpoint, exporter, Prometheus, or OpenTelemetry integration is included.

@@ -120,3 +120,7 @@ The gateway emits one `gateway_provider_attempt` event for each actual provider 
 ### Phase 18 request validation and error observability
 
 `gateway_request_validation_result` records whether API request validation succeeded or was rejected using only outcome, status code, and the normalized `invalid_request` code when applicable. `gateway_request_completed` preserves normalized gateway error codes alongside outcome and status. Validation details, request bodies, prompts, completions, secrets, and raw exceptions are never emitted.
+
+### Phase 18 Step 10A metrics foundation
+
+The gateway now has a technology-neutral, safe in-memory metrics contract for counters and histograms. It defines the first-phase metric catalog, strict metric-name validation, explicit per-metric label allow-lists, bounded values, and fixed latency buckets. This foundation is not application instrumentation: no metrics endpoint, exporter, Prometheus, OpenTelemetry integration, or dashboard is included.
