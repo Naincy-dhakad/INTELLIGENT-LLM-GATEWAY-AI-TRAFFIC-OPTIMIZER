@@ -335,3 +335,7 @@ The gateway emits `gateway_budget_decision` at the existing budget decision boun
 ## Phase 18 routing observability
 
 The gateway emits `gateway_routing_decision` at the existing deterministic routing boundary. Its fields are the normalized outcome, objective, policy version, provider ID, model ID, decision reason, and the existing `RoutingDecision` cost, latency, and health values. Provider/model IDs are operational identifiers only. Prompts, credentials, historical spend, remaining budget, configured budgets, and arbitrary metadata are not emitted. Provider attempts, retry, fallback, `/metrics`, tracing, and dashboards remain deferred.
+
+## Phase 18 provider attempt observability
+
+`gateway_provider_attempt` represents one actual provider execution attempt. Initial calls, retries, and fallback calls each produce their own event with bounded provider/model identifiers, deterministic attempt number and role, outcome, monotonic attempt latency, normalized error category, and timeout. Prompts, completions, credentials, raw provider exceptions, request/response bodies, and arbitrary metadata are never emitted.

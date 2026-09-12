@@ -136,7 +136,10 @@ class ChatService:
                 decision.selected_model_id, False,
             )
             try:
-                response = self._attempt(primary, base_request, context)
+                response = self._attempt(
+                    primary, base_request, context, attempt_count,
+                    "initial" if attempt_count == 1 else "retry",
+                )
                 return ChatExecutionResult(response, decision, classification, False, attempt_count)
             except ProviderError as error:
                 last_error = error
@@ -175,7 +178,10 @@ class ChatService:
                         request, required_capabilities, fallback_model, context
                     )
                     try:
-                        response = self._attempt(fallback_provider, fallback_request, context)
+                        response = self._attempt(
+                            fallback_provider, fallback_request, context,
+                            attempt_count, "fallback",
+                        )
                         return ChatExecutionResult(response, decision, classification, True, attempt_count)
                     except ProviderError as error:
                         last_error = error
@@ -186,6 +192,36 @@ class ChatService:
             category=ProviderErrorCategory.TIMEOUT,
             message="The request deadline expired before provider execution.",
         )
+
+    def _emit_provider_attempt(
+        self,
+        request_id: str,
+        provider_id: str,
+        model_id: str | None,
+        attempt_number: int,
+        attempt_role: str,
+        outcome: str,
+        elapsed_seconds: float,
+        error_category: str | None,
+        timeout_ms: int,
+    ) -> None:
+        attributes = {
+            "provider_id": provider_id,
+            "model_id": model_id,
+            "attempt_number": attempt_number,
+            "attempt_role": attempt_role,
+            "outcome": outcome,
+            "latency_ms": max(0, round(elapsed_seconds * 1000)),
+            "timeout_ms": timeout_ms,
+        }
+        if error_category is not None:
+            attributes["error_category"] = error_category
+        try:
+            self._observability.emit(
+                make_event(EventType.PROVIDER_ATTEMPT, request_id, **attributes)
+            )
+        except Exception:
+            pass
 
     def _emit_routing_success(
         self,
@@ -299,7 +335,14 @@ class ChatService:
             required_capabilities=required_capabilities,
         )
 
-    def _attempt(self, provider: Provider, request: ProviderChatRequest, context: RequestContext):
+    def _attempt(
+        self,
+        provider: Provider,
+        request: ProviderChatRequest,
+        context: RequestContext,
+        attempt_number: int,
+        attempt_role: str,
+    ):
         remaining_ms = math.ceil(self._remaining_seconds(context) * 1000)
         if remaining_ms <= 0:
             raise ProviderError(
@@ -309,7 +352,34 @@ class ChatService:
         bounded_request = request.model_copy(
             update={"timeout_ms": min(request.timeout_ms, remaining_ms)}
         )
-        return provider.chat(bounded_request)
+        started = self._clock()
+        try:
+            response = provider.chat(bounded_request)
+        except ProviderError as error:
+            self._emit_provider_attempt(
+                context.request_id,
+                provider.metadata.id,
+                bounded_request.model,
+                attempt_number,
+                attempt_role,
+                "failure",
+                self._clock() - started,
+                error.category.value,
+                bounded_request.timeout_ms,
+            )
+            raise
+        self._emit_provider_attempt(
+            context.request_id,
+            provider.metadata.id,
+            response.model,
+            attempt_number,
+            attempt_role,
+            "success",
+            self._clock() - started,
+            None,
+            bounded_request.timeout_ms,
+        )
+        return response
 
     def _remaining_seconds(self, context: RequestContext) -> float:
         return max(0.0, context.deadline_monotonic - self._clock())

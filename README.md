@@ -108,3 +108,7 @@ The gateway emits `gateway_budget_decision` with normalized outcome, objective, 
 ### Phase 18 routing observability
 
 The gateway emits `gateway_routing_decision` using the existing routing decision: normalized outcome, objective, policy version, provider/model identifiers, reason, and existing estimated cost, latency, and health values. Provider and model IDs are operational identifiers only. Prompts, secrets, and historical or remaining budget amounts are never emitted. Provider attempts, retries, fallbacks, `/metrics`, tracing, and dashboards remain deferred.
+
+### Phase 18 provider attempt observability
+
+The gateway emits one `gateway_provider_attempt` event for each actual provider call, including initial attempts, retries, and fallback attempts. Events contain only bounded provider/model identifiers, attempt number and role, outcome, monotonic attempt latency, normalized error category, and timeout. Prompts, completions, credentials, raw provider errors, request/response bodies, and arbitrary metadata are excluded.
