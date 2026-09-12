@@ -68,7 +68,10 @@ def test_bounded_values_and_routes_are_enforced():
         validate_labels("gateway_provider_attempts_total", {"attempt_role": "other"})
     with pytest.raises(ValueError):
         validate_labels("gateway_requests_total", {"route": "unbounded-user-route"})
-    validate_labels("gateway_requests_total", {"route": "chat", "status_class": "2xx"})
+    validate_labels("gateway_requests_total", {"route": "chat", "status_class": "2xx", "outcome": "success"})
+    validate_labels("gateway_provider_attempts_total", {"attempt_role": "retry", "outcome": "failure"})
+    validate_labels("gateway_classification_total", {"complexity_level": "HIGH"})
+    validate_labels("gateway_errors_total", {"error_domain": "provider", "status_class": "5xx"})
 
 
 def test_provider_and_model_identifiers_are_bounded_safe_values():

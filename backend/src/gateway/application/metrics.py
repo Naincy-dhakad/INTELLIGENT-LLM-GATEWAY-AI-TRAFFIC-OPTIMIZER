@@ -104,9 +104,13 @@ def validate_labels(name: str, labels: Mapping[str, str] | None) -> tuple[tuple[
     if not set(normalized).issubset(definition.allowed_labels):
         raise ValueError(f"labels are not allowed for {name}")
     for key, value in normalized.items():
-        if not isinstance(value, str) or len(value) > _LABEL_MAX_LENGTH or not _IDENTIFIER.fullmatch(value):
+        if not isinstance(value, str) or len(value) > _LABEL_MAX_LENGTH:
             raise ValueError("metric label values must be bounded safe identifiers")
         allowed = definition.label_values.get(key) or _BOUNDED_VALUES.get(key)
-        if allowed is not None and value not in allowed:
-            raise ValueError(f"invalid value for metric label: {key}")
+        if allowed is not None:
+            if value not in allowed:
+                raise ValueError(f"invalid value for metric label: {key}")
+            continue
+        if not _IDENTIFIER.fullmatch(value):
+            raise ValueError("metric label values must be bounded safe identifiers")
     return tuple(sorted(normalized.items()))
