@@ -24,6 +24,10 @@ FIRST_PHASE_METRICS = {
 }
 
 
+def test_metric_catalog_constructs_with_name_validation_available():
+    assert metric_definition("gateway_requests_total").name == "gateway_requests_total"
+
+
 def test_catalog_defines_only_first_phase_metrics_plus_legacy_compatibility():
     assert FIRST_PHASE_METRICS.issubset(METRIC_CATALOG)
     assert "gateway_request_success_total" not in METRIC_CATALOG

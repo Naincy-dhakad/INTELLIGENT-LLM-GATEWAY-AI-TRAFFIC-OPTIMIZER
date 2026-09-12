@@ -4,7 +4,7 @@ This module defines the application metrics contract only. It has no exporter,
 network, persistence, or metrics-library dependency.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 import re
 from types import MappingProxyType
@@ -25,13 +25,18 @@ GATEWAY_REQUEST_BUCKETS = (0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 
 PROVIDER_ATTEMPT_BUCKETS = (0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60)
 
 
+def validate_metric_name(name: str) -> None:
+    if not isinstance(name, str) or len(name) > _METRIC_MAX_LENGTH or not _GATEWAY_NAME.fullmatch(name):
+        raise ValueError("metric name must be a bounded lowercase gateway snake_case name")
+
+
 @dataclass(frozen=True)
 class MetricDefinition:
     name: str
     metric_type: MetricType
     description: str
     allowed_labels: frozenset[str] = frozenset()
-    label_values: Mapping[str, frozenset[str]] = MappingProxyType({})
+    label_values: Mapping[str, frozenset[str]] = field(default_factory=dict)
     buckets: tuple[float, ...] = ()
 
     def __post_init__(self) -> None:
@@ -79,11 +84,6 @@ _BOUNDED_VALUES = {
     "error_domain": frozenset({"authentication", "rate_limit", "validation", "budget", "routing", "provider", "internal"}),
     "route": frozenset({"chat", "/api/v1/chat", "health", "/health"}),
 }
-
-
-def validate_metric_name(name: str) -> None:
-    if not isinstance(name, str) or len(name) > _METRIC_MAX_LENGTH or not _GATEWAY_NAME.fullmatch(name):
-        raise ValueError("metric name must be a bounded lowercase gateway snake_case name")
 
 
 def metric_definition(name: str) -> MetricDefinition:
