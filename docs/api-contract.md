@@ -363,3 +363,7 @@ Existing normalized observability events now drive the bounded Step 10A metrics 
 ## Phase 18 Step 12E metrics exporter foundation
 
 A read-only `MetricsExporter` protocol and deterministic text renderer now consume `MetricsSnapshot` only. Counter and histogram text output uses stable metric/label/sample ordering and validated catalog data. No Prometheus dependency, exporter endpoint, or `/metrics` exposure is enabled.
+
+## Phase 18 Step 14 metrics configuration contract
+
+Future metrics exposure settings are typed and disabled by default. The local default is `METRICS_BIND_HOST=127.0.0.1`, port `9090`, and `METRICS_AUTH_MODE=mtls`; the optional operator token is secret-protected. This configuration contract does not register `/metrics`, start a management listener, or implement authentication.

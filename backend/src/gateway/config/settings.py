@@ -1,5 +1,6 @@
 from decimal import Decimal
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import SecretStr, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -32,6 +33,12 @@ class Settings(BaseSettings):
     rate_limit_window_seconds: int = Field(default=60, gt=0)
     usage_tracking_enabled: bool = False
     database_url: str = "postgresql+psycopg://localhost/gateway"
+    metrics_enabled: bool = False
+    metrics_management_enabled: bool = False
+    metrics_bind_host: str = "127.0.0.1"
+    metrics_bind_port: int = Field(default=9090, ge=1, le=65535)
+    metrics_auth_mode: Literal["mtls", "token"] = "mtls"
+    metrics_operator_token: SecretStr | None = None
 
     @model_validator(mode="after")
     def rate_limit_requires_authentication(self) -> "Settings":

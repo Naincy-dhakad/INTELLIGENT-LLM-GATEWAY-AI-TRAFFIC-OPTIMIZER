@@ -136,3 +136,7 @@ The in-memory metrics foundation now exposes an immutable, technology-neutral `M
 ### Phase 18 Step 12E metrics exporter foundation
 
 The application now defines a technology-neutral `MetricsExporter` contract and deterministic text renderer consuming only immutable `MetricsSnapshot` values. The renderer supports counter and histogram exposition without exporter dependencies. Prometheus integration, HTTP exposition, authentication, and `/metrics` remain deferred.
+
+### Phase 18 Step 14 metrics configuration contract
+
+The future metrics management configuration is now typed and disabled by default: `METRICS_ENABLED=false`, `METRICS_MANAGEMENT_ENABLED=false`, `METRICS_BIND_HOST=127.0.0.1`, `METRICS_BIND_PORT=9090`, and `METRICS_AUTH_MODE=mtls`. `METRICS_OPERATOR_TOKEN` is optional and secret-protected. These settings do not enable metrics exposition, `/metrics`, a management listener, or operator authentication.
