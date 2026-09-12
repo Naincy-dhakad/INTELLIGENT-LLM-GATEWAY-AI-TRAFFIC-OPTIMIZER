@@ -109,6 +109,7 @@ class ChatService:
             )
         except RoutingError as error:
             self._emit_budget_decision(context.request_id, routing_request, "failure", error.category.value)
+            self._emit_routing_failure(context.request_id, routing_request, error)
             raise
         self._emit_budget_decision(
             context.request_id,
@@ -117,6 +118,7 @@ class ChatService:
             None,
             decision.policy_version,
         )
+        self._emit_routing_success(context.request_id, routing_request, decision)
         primary = self._registry.get(decision.selected_provider_id)
         if primary is None:
             raise LookupError("selected provider is no longer available")
@@ -184,6 +186,54 @@ class ChatService:
             category=ProviderErrorCategory.TIMEOUT,
             message="The request deadline expired before provider execution.",
         )
+
+    def _emit_routing_success(
+        self,
+        request_id: str,
+        request: RoutingRequest,
+        decision: RoutingDecision,
+    ) -> None:
+        attributes = {
+            "outcome": "success",
+            "objective": request.objective,
+            "policy_version": decision.policy_version,
+            "provider_id": decision.selected_provider_id,
+            "model_id": decision.selected_model_id,
+            "reason_code": decision.reason,
+            "estimated_cost_usd": (
+                float(decision.estimated_cost_usd)
+                if decision.estimated_cost_usd is not None else None
+            ),
+            "estimated_latency_ms": decision.estimated_latency_ms,
+            "health_score": decision.health_score,
+        }
+        try:
+            self._observability.emit(
+                make_event(EventType.ROUTING_DECISION, request_id, **attributes)
+            )
+        except Exception:
+            # Routing behavior must not depend on telemetry.
+            pass
+
+    def _emit_routing_failure(
+        self,
+        request_id: str,
+        request: RoutingRequest,
+        error: RoutingError,
+    ) -> None:
+        try:
+            self._observability.emit(
+                make_event(
+                    EventType.ROUTING_DECISION,
+                    request_id,
+                    outcome="failure",
+                    objective=request.objective,
+                    policy_version=self._routing_policy._policy_version(request),
+                    reason_code=error.category.value,
+                )
+            )
+        except Exception:
+            pass
 
     def _emit_budget_decision(
         self,

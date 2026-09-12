@@ -331,3 +331,7 @@ The gateway emits `gateway_classification_completed` after the existing determin
 ## Phase 18 budget observability
 
 The gateway emits `gateway_budget_decision` at the existing budget decision boundaries using normalized outcome, objective, policy version, and approved error codes. Prompts, credentials, database or Redis information, accumulated spend, remaining budget, maximum budget, estimated request cost, and arbitrary metadata are not emitted. Routing, provider, retry, fallback, and metrics endpoint observability remain deferred.
+
+## Phase 18 routing observability
+
+The gateway emits `gateway_routing_decision` at the existing deterministic routing boundary. Its fields are the normalized outcome, objective, policy version, provider ID, model ID, decision reason, and the existing `RoutingDecision` cost, latency, and health values. Provider/model IDs are operational identifiers only. Prompts, credentials, historical spend, remaining budget, configured budgets, and arbitrary metadata are not emitted. Provider attempts, retry, fallback, `/metrics`, tracing, and dashboards remain deferred.

@@ -104,3 +104,7 @@ The gateway emits `gateway_classification_completed` with the normalized categor
 ### Phase 18 budget observability
 
 The gateway emits `gateway_budget_decision` with normalized outcome, objective, policy version, and existing bounded error codes where applicable. Sensitive request content, credentials, and exact financial or budget amounts are never emitted. Routing, provider, retry, fallback, and metrics endpoint observability remain deferred.
+
+### Phase 18 routing observability
+
+The gateway emits `gateway_routing_decision` using the existing routing decision: normalized outcome, objective, policy version, provider/model identifiers, reason, and existing estimated cost, latency, and health values. Provider and model IDs are operational identifiers only. Prompts, secrets, and historical or remaining budget amounts are never emitted. Provider attempts, retries, fallbacks, `/metrics`, tracing, and dashboards remain deferred.
