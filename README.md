@@ -132,3 +132,7 @@ The existing lifecycle and normalized application events now feed the Step 10A m
 ### Phase 18 Step 12A metrics snapshots
 
 The in-memory metrics foundation now exposes an immutable, technology-neutral `MetricsSnapshot` containing deterministic counter and histogram snapshots. Snapshot creation copies state under the metrics lock and performs no exporting, persistence, network access, or endpoint exposure.
+
+### Phase 18 Step 12E metrics exporter foundation
+
+The application now defines a technology-neutral `MetricsExporter` contract and deterministic text renderer consuming only immutable `MetricsSnapshot` values. The renderer supports counter and histogram exposition without exporter dependencies. Prometheus integration, HTTP exposition, authentication, and `/metrics` remain deferred.

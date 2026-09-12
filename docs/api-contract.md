@@ -359,3 +359,7 @@ Existing normalized observability events now drive the bounded Step 10A metrics 
 ## Phase 18 Step 12A metrics snapshots
 
 `InMemoryMetrics.snapshot()` returns a read-only, deterministic `MetricsSnapshot` containing validated metric definitions, labels, counter values, and coherent histogram observations, buckets, counts, and sums. Snapshot creation is thread-safe and detached from later source mutations. Exporters and `/metrics` remain deferred.
+
+## Phase 18 Step 12E metrics exporter foundation
+
+A read-only `MetricsExporter` protocol and deterministic text renderer now consume `MetricsSnapshot` only. Counter and histogram text output uses stable metric/label/sample ordering and validated catalog data. No Prometheus dependency, exporter endpoint, or `/metrics` exposure is enabled.
