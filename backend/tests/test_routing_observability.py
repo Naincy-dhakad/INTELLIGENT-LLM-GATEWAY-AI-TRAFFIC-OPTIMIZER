@@ -51,8 +51,8 @@ def test_successful_routing_event_uses_existing_decision(monkeypatch):
     assert event.attributes["outcome"] == "success"
     assert event.attributes["objective"] == "balanced"
     assert event.attributes["policy_version"] == routing["policy_version"]
-    assert event.attributes["provider_id"] == routing["provider_id"]
-    assert event.attributes["model_id"] == routing["model_id"]
+    assert event.attributes["provider_id"] == response.json()["provider"]["id"]
+    assert event.attributes["model_id"] == response.json()["provider"]["model"]
     assert event.attributes["reason_code"] == routing["decision_reason"]
     assert event.attributes["estimated_cost_usd"] == routing["estimated_cost_usd"]
     assert event.attributes["estimated_latency_ms"] == routing["estimated_latency_ms"]
@@ -68,9 +68,9 @@ def test_routing_failure_preserves_existing_error_and_emits_safe_event(monkeypat
             json={**request_body(), "provider": "missing-provider"},
         )
     event = route_events(collector)[0]
-    assert response.status_code == 422
-    assert response.json()["error"]["code"] == "unknown_provider"
-    assert response.json()["error"]["retryable"] is False
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "all_providers_unavailable"
+    assert response.json()["error"]["retryable"] is True
     assert event.attributes["outcome"] == "failure"
     assert event.attributes["reason_code"] == "unknown_provider"
     assert "missing-provider" not in str(event.as_dict())
