@@ -5,7 +5,7 @@ from threading import Lock
 from typing import Mapping, Protocol
 
 from gateway.application.metrics import metric_definition, validate_labels
-from gateway.application.observability_events import ObservabilityEvent
+from gateway.application.observability_events import EventType, ObservabilityEvent
 
 
 class EventSink(Protocol):
@@ -37,6 +37,79 @@ class NoopObservability:
         _ = metric, value, labels
 
 
+def _metric_labels(attributes: Mapping[str, object]) -> dict[str, str]:
+    labels: dict[str, str] = {}
+    route = attributes.get("route")
+    if route in {"/api/v1/chat", "/health", "chat", "health"}:
+        labels["route"] = str(route)
+    status_code = attributes.get("status_code")
+    if isinstance(status_code, int):
+        labels["status_class"] = f"{status_code // 100}xx"
+    for key in ("outcome", "category", "complexity_level", "policy_version", "objective", "error_code", "error_category", "attempt_role", "provider_id", "model_id", "from_provider_id", "to_provider_id", "attempt_number", "error_domain"):
+        value = attributes.get(key)
+        if value is not None:
+            labels[key] = str(value)
+    return labels
+
+
+def record_event_metrics(metrics: MetricsSink, event_type: EventType, attributes: Mapping[str, object]) -> None:
+    """Translate an already-normalized event into bounded metrics."""
+    labels = _metric_labels(attributes)
+    try:
+        increment = metrics.increment
+        observe = metrics.observe
+        if event_type is EventType.REQUEST_COMPLETED:
+            increment("gateway_requests_total", labels)
+            latency = attributes.get("latency_ms")
+            if isinstance(latency, (int, float)):
+                observe("gateway_request_duration_seconds", latency / 1000, labels)
+            if attributes.get("error_code") is not None:
+                increment("gateway_errors_total", {key: value for key, value in labels.items() if key in {"error_code", "status_class"}})
+        elif event_type is EventType.AUTHENTICATION_RESULT:
+            increment("gateway_authentication_results_total", labels)
+        elif event_type is EventType.RATE_LIMIT_RESULT:
+            increment("gateway_rate_limit_results_total", labels)
+        elif event_type is EventType.CLASSIFICATION_COMPLETED:
+            increment("gateway_classification_total", labels)
+        elif event_type is EventType.BUDGET_DECISION:
+            increment("gateway_budget_decisions_total", labels)
+        elif event_type is EventType.ROUTING_DECISION:
+            increment("gateway_routing_decisions_total", {key: value for key, value in labels.items() if key in {"outcome", "objective", "policy_version", "provider_id", "model_id"}})
+        elif event_type is EventType.PROVIDER_ATTEMPT:
+            increment("gateway_provider_attempts_total", labels)
+            latency = attributes.get("latency_ms")
+            if isinstance(latency, (int, float)):
+                observe("gateway_provider_attempt_duration_seconds", latency / 1000, labels)
+        elif event_type is EventType.RETRY_SCHEDULED:
+            increment("gateway_retries_scheduled_total", {key: value for key, value in labels.items() if key in {"provider_id", "model_id", "error_category", "attempt_number"}})
+        elif event_type is EventType.FALLBACK_SELECTED:
+            increment("gateway_fallbacks_selected_total", {key: value for key, value in labels.items() if key in {"from_provider_id", "to_provider_id", "attempt_number"}})
+        elif event_type is EventType.REQUEST_VALIDATION_RESULT:
+            increment("gateway_validation_results_total", labels)
+    except Exception:
+        # Metrics are strictly best effort and cannot affect business behavior.
+        pass
+
+
+class MetricsObservability:
+    """Delegating port that records metrics for every normalized event."""
+
+    def __init__(self, delegate: ObservabilityPort) -> None:
+        self._delegate = delegate
+
+    def emit(self, event: ObservabilityEvent) -> None:
+        try:
+            self._delegate.emit(event)
+        finally:
+            record_event_metrics(self._delegate, event.event_type, event.attributes)
+
+    def increment(self, metric: str, labels: Mapping[str, str] | None = None, value: int = 1) -> None:
+        self._delegate.increment(metric, labels, value)
+
+    def observe(self, metric: str, value: float, labels: Mapping[str, str] | None = None) -> None:
+        self._delegate.observe(metric, value, labels)
+
+
 class InMemoryMetrics:
     """Bounded-label test/local implementation; not a production metrics store."""
 
@@ -50,11 +123,11 @@ class InMemoryMetrics:
         return validate_labels(metric, labels)
 
     def increment(self, metric: str, labels: Mapping[str, str] | None = None, value: int = 1) -> None:
-        if not metric or value < 0:
-            raise ValueError("metric increment must be named and non-negative")
         definition = metric_definition(metric)
         if definition.metric_type.value != "counter":
             raise ValueError("metric is not a counter")
+        if not isinstance(value, int) or value < 0:
+            raise ValueError("metric increment must be named and non-negative")
         key = (metric, self._labels(metric, labels))
         with self._lock:
             self._counts[key] += value

@@ -351,3 +351,7 @@ The gateway emits `gateway_routing_decision` at the existing deterministic routi
 ## Phase 18 Step 10A metrics foundation
 
 A dependency-free metrics contract now defines bounded counters and histograms for the first-phase catalog. Metric names, labels, sensitive fields, status classes, routes, provider/model identifiers, and histogram buckets are validated centrally. No application metric instrumentation, `/metrics` endpoint, exporter, Prometheus, or OpenTelemetry integration is included.
+
+## Phase 18 Step 11 metrics instrumentation
+
+Existing normalized observability events now drive the bounded Step 10A metrics contract through the application observability port. Request and provider latency use measured seconds, while counters cover the existing lifecycle and decision boundaries. Metric failures are isolated. No `/metrics` endpoint, exporter, Prometheus, OpenTelemetry integration, API contract change, or persistence behavior is included.

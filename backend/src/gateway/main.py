@@ -13,7 +13,7 @@ from gateway.api.health import router as health_router
 from gateway.api.middleware import RequestIDMiddleware
 from gateway.application.budget import BudgetService
 from gateway.application.chat_service import ChatService
-from gateway.application.observability import NoopObservability, ObservabilityPort
+from gateway.application.observability import MetricsObservability, NoopObservability, ObservabilityPort
 from gateway.application.rate_limiting import DisabledRateLimiter
 from gateway.application.usage_tracking import UsageRecorder
 from gateway.config.settings import get_settings
@@ -33,7 +33,7 @@ class _UnavailableUsageRepository:
 
 def create_app(observability: ObservabilityPort | None = None) -> FastAPI:
     settings = get_settings()
-    observability = observability or NoopObservability()
+    observability = MetricsObservability(observability or NoopObservability())
     app = FastAPI(title=settings.app_name, version="0.1.0")
     app.state.observability = observability
     app.state.gateway_authenticator = GatewayAuthenticator(

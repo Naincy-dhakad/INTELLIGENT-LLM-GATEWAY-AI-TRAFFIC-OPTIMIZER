@@ -124,3 +124,7 @@ The gateway emits one `gateway_provider_attempt` event for each actual provider 
 ### Phase 18 Step 10A metrics foundation
 
 The gateway now has a technology-neutral, safe in-memory metrics contract for counters and histograms. It defines the first-phase metric catalog, strict metric-name validation, explicit per-metric label allow-lists, bounded values, and fixed latency buckets. This foundation is not application instrumentation: no metrics endpoint, exporter, Prometheus, OpenTelemetry integration, or dashboard is included.
+
+### Phase 18 Step 11 metrics instrumentation
+
+The existing lifecycle and normalized application events now feed the Step 10A metrics contract through a delegating observability port. Counters and latency histograms are recorded for request, authentication, rate-limit, validation, classification, budget, routing, provider, retry, fallback, and normalized error boundaries. Metrics remain in-memory/test-local only; no endpoint, exporter, Prometheus, OpenTelemetry integration, or application-specific metric duplication was added.

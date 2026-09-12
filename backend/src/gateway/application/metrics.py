@@ -83,6 +83,7 @@ _BOUNDED_VALUES = {
     "complexity_level": frozenset({"LOW", "MEDIUM", "HIGH"}),
     "error_domain": frozenset({"authentication", "rate_limit", "validation", "budget", "routing", "provider", "internal"}),
     "route": frozenset({"chat", "/api/v1/chat", "health", "/health"}),
+    "attempt_number": frozenset({"1", "2", "3"}),
 }
 
 

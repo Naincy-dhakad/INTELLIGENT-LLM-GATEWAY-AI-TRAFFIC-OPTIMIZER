@@ -2,7 +2,7 @@ import re
 import secrets
 import time
 
-from gateway.application.observability import EventSink, NoopObservability
+from gateway.application.observability import EventSink, NoopObservability, record_event_metrics
 from gateway.application.observability_events import EventType, make_event
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -42,7 +42,6 @@ class RequestIDMiddleware:
         except Exception:
             # Observability is strictly best effort and cannot affect the request.
             pass
-
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
