@@ -4,7 +4,13 @@ from collections import Counter
 from threading import Lock
 from typing import Mapping, Protocol
 
-from gateway.application.metrics import metric_definition, validate_labels
+from gateway.application.metrics import (
+    CounterSnapshot,
+    HistogramSnapshot,
+    MetricsSnapshot,
+    metric_definition,
+    validate_labels,
+)
 from gateway.application.observability_events import EventType, ObservabilityEvent
 
 
@@ -143,6 +149,39 @@ class InMemoryMetrics:
         normalized_labels = self._labels(metric, labels)
         with self._lock:
             self._observations.append((metric, float(value), normalized_labels))
+
+    def snapshot(self) -> MetricsSnapshot:
+        """Return a copied, deterministic view without exposing mutable state."""
+        with self._lock:
+            counts = tuple(self._counts.items())
+            observations = tuple(self._observations)
+
+        counter_snapshots = tuple(
+            CounterSnapshot(metric_definition(name), labels, value)
+            for (name, labels), value in sorted(counts, key=lambda item: item[0])
+        )
+        grouped: dict[tuple[str, tuple[tuple[str, str], ...]], list[float]] = {}
+        for name, value, labels in observations:
+            grouped.setdefault((name, labels), []).append(value)
+
+        histogram_snapshots: list[HistogramSnapshot] = []
+        for (name, labels), values in sorted(grouped.items()):
+            definition = metric_definition(name)
+            bucket_counts = tuple(
+                (bucket, sum(value <= bucket for value in values))
+                for bucket in definition.buckets
+            )
+            histogram_snapshots.append(
+                HistogramSnapshot(
+                    definition=definition,
+                    labels=labels,
+                    observations=tuple(values),
+                    bucket_counts=bucket_counts,
+                    count=len(values),
+                    sum=sum(values),
+                )
+            )
+        return MetricsSnapshot(tuple(counter_snapshots), tuple(histogram_snapshots))
 
     def counts(self) -> dict[tuple[str, tuple[tuple[str, str], ...]], int]:
         with self._lock:

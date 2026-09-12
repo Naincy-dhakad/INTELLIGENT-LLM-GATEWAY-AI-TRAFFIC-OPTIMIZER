@@ -128,3 +128,7 @@ The gateway now has a technology-neutral, safe in-memory metrics contract for co
 ### Phase 18 Step 11 metrics instrumentation
 
 The existing lifecycle and normalized application events now feed the Step 10A metrics contract through a delegating observability port. Counters and latency histograms are recorded for request, authentication, rate-limit, validation, classification, budget, routing, provider, retry, fallback, and normalized error boundaries. Metrics remain in-memory/test-local only; no endpoint, exporter, Prometheus, OpenTelemetry integration, or application-specific metric duplication was added.
+
+### Phase 18 Step 12A metrics snapshots
+
+The in-memory metrics foundation now exposes an immutable, technology-neutral `MetricsSnapshot` containing deterministic counter and histogram snapshots. Snapshot creation copies state under the metrics lock and performs no exporting, persistence, network access, or endpoint exposure.

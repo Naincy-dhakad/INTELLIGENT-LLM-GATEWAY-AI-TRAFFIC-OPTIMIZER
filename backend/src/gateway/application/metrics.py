@@ -41,12 +41,38 @@ class MetricDefinition:
 
     def __post_init__(self) -> None:
         validate_metric_name(self.name)
+        object.__setattr__(self, "label_values", MappingProxyType(dict(self.label_values)))
         if self.metric_type is MetricType.HISTOGRAM and not self.buckets:
             raise ValueError("histograms require bounded buckets")
         if any(left >= right for left, right in zip(self.buckets, self.buckets[1:])):
             raise ValueError("histogram buckets must be strictly increasing")
         if not set(self.label_values).issubset(self.allowed_labels):
             raise ValueError("bounded label values must belong to allowed labels")
+
+
+@dataclass(frozen=True)
+class CounterSnapshot:
+    definition: MetricDefinition
+    labels: tuple[tuple[str, str], ...]
+    value: int
+
+
+@dataclass(frozen=True)
+class HistogramSnapshot:
+    definition: MetricDefinition
+    labels: tuple[tuple[str, str], ...]
+    observations: tuple[float, ...]
+    bucket_counts: tuple[tuple[float, int], ...]
+    count: int
+    sum: float
+
+
+@dataclass(frozen=True)
+class MetricsSnapshot:
+    """Immutable, deterministic view of validated metric state."""
+
+    counters: tuple[CounterSnapshot, ...] = ()
+    histograms: tuple[HistogramSnapshot, ...] = ()
 
 
 _METRIC_DEFINITIONS = (

@@ -355,3 +355,7 @@ A dependency-free metrics contract now defines bounded counters and histograms f
 ## Phase 18 Step 11 metrics instrumentation
 
 Existing normalized observability events now drive the bounded Step 10A metrics contract through the application observability port. Request and provider latency use measured seconds, while counters cover the existing lifecycle and decision boundaries. Metric failures are isolated. No `/metrics` endpoint, exporter, Prometheus, OpenTelemetry integration, API contract change, or persistence behavior is included.
+
+## Phase 18 Step 12A metrics snapshots
+
+`InMemoryMetrics.snapshot()` returns a read-only, deterministic `MetricsSnapshot` containing validated metric definitions, labels, counter values, and coherent histogram observations, buckets, counts, and sums. Snapshot creation is thread-safe and detached from later source mutations. Exporters and `/metrics` remain deferred.
