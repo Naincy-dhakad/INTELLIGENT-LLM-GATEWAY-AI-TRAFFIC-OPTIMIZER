@@ -343,3 +343,7 @@ The gateway emits `gateway_routing_decision` at the existing deterministic routi
 ## Phase 18 retry and fallback observability
 
 `gateway_retry_scheduled` represents an actually scheduled retry and is emitted after the existing retryability and deadline checks. `gateway_fallback_selected` represents an actually selected fallback immediately before its provider attempt. Both preserve the existing request ID and use only bounded operational fields and normalized error categories/reasons. Prompts, completions, credentials, raw provider exceptions, and arbitrary metadata are never emitted.
+
+## Phase 18 request validation and error observability
+
+`gateway_request_validation_result` reports successful or rejected API validation with bounded outcome and status fields, plus the existing normalized error code for rejected requests. Completion events preserve normalized gateway error codes without exposing validation details, request bodies, prompts, completions, credentials, or raw exceptions.

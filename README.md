@@ -116,3 +116,7 @@ The gateway emits one `gateway_provider_attempt` event for each actual provider 
 ### Phase 18 retry and fallback observability
 
 `gateway_retry_scheduled` is emitted only after the existing retryability and deadline checks schedule a retry. `gateway_fallback_selected` is emitted only after the existing fallback logic selects an available fallback that will be attempted. Events use bounded provider/model identifiers, attempt information, normalized error categories/reasons, and delay milliseconds; prompts, completions, credentials, raw exceptions, and request metadata are excluded.
+
+### Phase 18 request validation and error observability
+
+`gateway_request_validation_result` records whether API request validation succeeded or was rejected using only outcome, status code, and the normalized `invalid_request` code when applicable. `gateway_request_completed` preserves normalized gateway error codes alongside outcome and status. Validation details, request bodies, prompts, completions, secrets, and raw exceptions are never emitted.

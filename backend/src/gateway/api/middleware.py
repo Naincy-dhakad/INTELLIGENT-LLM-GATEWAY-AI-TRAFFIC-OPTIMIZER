@@ -76,13 +76,19 @@ class RequestIDMiddleware:
                 message = {**message, "headers": response_headers}
                 if not completed:
                     completed = True
+                    completion_attributes = {
+                        "route": route[:128],
+                        "status_code": message["status"],
+                        "outcome": _outcome(message["status"]),
+                        "latency_ms": max(0, round((time.monotonic() - started) * 1000)),
+                    }
+                    error_code = scope.get("state", {}).get("error_code")
+                    if error_code is not None:
+                        completion_attributes["error_code"] = error_code
                     self._emit(
                         EventType.REQUEST_COMPLETED,
                         request_id,
-                        route=route[:128],
-                        status_code=message["status"],
-                        outcome=_outcome(message["status"]),
-                        latency_ms=max(0, round((time.monotonic() - started) * 1000)),
+                        **completion_attributes,
                     )
             await send(message)
 
@@ -96,6 +102,7 @@ class RequestIDMiddleware:
                     route=route[:128],
                     status_code=500,
                     outcome="failure",
+                    error_code=scope.get("state", {}).get("error_code", "internal_error"),
                     latency_ms=max(0, round((time.monotonic() - started) * 1000)),
                 )
             raise

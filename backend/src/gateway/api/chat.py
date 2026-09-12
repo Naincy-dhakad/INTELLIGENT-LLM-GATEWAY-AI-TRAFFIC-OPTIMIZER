@@ -30,6 +30,20 @@ def get_chat_service(request: Request) -> ChatService:
     return request.app.state.chat_service
 
 
+def _emit_validation_success(request: Request) -> None:
+    try:
+        request.app.state.observability.emit(
+            make_event(
+                EventType.REQUEST_VALIDATION_RESULT,
+                request.state.request_id,
+                outcome="success",
+                status_code=200,
+            )
+        )
+    except Exception:
+        pass
+
+
 def _emit_rate_limit_result(request: Request, outcome: str, **attributes: object) -> None:
     try:
         request.app.state.observability.emit(
@@ -297,6 +311,7 @@ def chat(
     _rate_limit: None = Depends(require_rate_limit),
     service: ChatService = Depends(get_chat_service),
 ) -> ChatResponse:
+    _emit_validation_success(request)
     header_timeout = _header_timeout(request)
     if header_timeout is not None and body.timeout_ms is not None:
         raise GatewayAPIError(
