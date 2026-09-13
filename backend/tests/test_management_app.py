@@ -24,6 +24,10 @@ class RecordingExporter:
         return self.rendered
 
 
+def registered_paths(app):
+    return {path for route in app.routes if (path := getattr(route, "path", None)) is not None}
+
+
 def test_management_app_is_standalone_and_retains_read_only_dependencies():
     source = lambda: MetricsSnapshot()
     exporter = TextMetricsExporter()
@@ -33,23 +37,23 @@ def test_management_app_is_standalone_and_retains_read_only_dependencies():
     assert management is not public
     assert management.state.metrics_snapshot_source is source
     assert management.state.metrics_exporter is exporter
-    paths = {route.path for route in management.routes}
+    paths = registered_paths(management)
     assert "/api/v1/chat" not in paths
     assert "/health" not in paths
     assert "/metrics" in paths
-    public_paths = {route.path for route in public.routes}
+    public_paths = registered_paths(public)
     assert "/metrics" not in public_paths
 
 
 def test_management_app_has_no_gateway_business_dependencies():
     management = create_management_app(lambda: MetricsSnapshot(), TextMetricsExporter())
-    state = vars(management.state)
-    assert "gateway_authenticator" not in state
-    assert "rate_limiter" not in state
-    assert "chat_service" not in state
-    assert "budget_service" not in state
-    assert "usage_recorder" not in state
-    assert "provider_registry" not in state
+    state = management.state
+    assert not hasattr(state, "gateway_authenticator")
+    assert not hasattr(state, "rate_limiter")
+    assert not hasattr(state, "chat_service")
+    assert not hasattr(state, "budget_service")
+    assert not hasattr(state, "usage_recorder")
+    assert not hasattr(state, "provider_registry")
 
 
 def test_metrics_endpoint_uses_source_and_exporter():
@@ -96,4 +100,4 @@ def test_management_listener_is_disabled_unless_both_flags_are_enabled():
     assert spec is not None
     assert spec.host == "127.0.0.2"
     assert spec.port == 9191
-    assert "/metrics" in {route.path for route in spec.app.routes}
+    assert "/metrics" in registered_paths(spec.app)
