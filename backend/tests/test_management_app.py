@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 import pytest
 
 from gateway.api.management import create_management_app
+from gateway.application.management_auth import ManagementIdentity
 from gateway.application.metrics import MetricsSnapshot
 from gateway.application.metrics_exporter import TextMetricsExporter
 from gateway.config.settings import Settings
@@ -12,6 +13,10 @@ from gateway.main import create_app
 
 
 @dataclass
+def token_settings():
+    return Settings(_env_file=None, metrics_auth_mode="token", metrics_operator_token="test-token")
+
+
 class RecordingExporter:
     rendered: str = "metric_output\n"
     received: object | None = None
@@ -60,9 +65,9 @@ def test_metrics_endpoint_uses_source_and_exporter():
     snapshot = MetricsSnapshot()
     calls = []
     exporter = RecordingExporter()
-    management = create_management_app(lambda: calls.append(True) or snapshot, exporter)
+    management = create_management_app(lambda: calls.append(True) or snapshot, exporter, token_settings())
     with TestClient(management) as client:
-        response = client.get("/metrics")
+        response = client.get("/metrics", headers={"Authorization": "Bearer test-token"})
     assert response.status_code == 200
     assert response.text == "metric_output\n"
     assert response.headers["content-type"] == "text/plain; version=0.0.4; charset=utf-8"
@@ -74,9 +79,9 @@ def test_metrics_endpoint_uses_source_and_exporter():
 def test_metrics_endpoint_failures_are_safe(failure):
     exporter = RecordingExporter(fail=failure == "exporter")
     source = (lambda: (_ for _ in ()).throw(RuntimeError("secret source failure"))) if failure == "source" else lambda: MetricsSnapshot()
-    management = create_management_app(source, exporter)
+    management = create_management_app(source, exporter, token_settings())
     with TestClient(management) as client:
-        response = client.get("/metrics")
+        response = client.get("/metrics", headers={"Authorization": "Bearer test-token"})
     assert response.status_code == 503
     assert response.text == "metrics temporarily unavailable"
     assert "secret" not in response.text
