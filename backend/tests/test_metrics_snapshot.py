@@ -81,3 +81,22 @@ def test_snapshot_rejects_no_unknown_state_by_construction():
         metrics.increment("unknown_metric", {})
     assert metrics.snapshot().counters == ()
     assert metrics.snapshot().histograms == ()
+
+
+def test_histogram_aggregation_remains_bounded_after_many_observations():
+    metrics = InMemoryMetrics()
+    for _ in range(10_000):
+        metrics.observe("gateway_request_duration_seconds", 0.1, {"route": "chat"})
+
+    histogram = metrics.snapshot().histograms[0]
+    assert histogram.count == 10_000
+    assert histogram.sum == pytest.approx(1_000)
+    assert len(histogram.observations) <= 256
+    assert len(metrics.observations()) <= 256
+
+
+def test_invalid_histogram_observation_does_not_mutate_aggregate_state():
+    metrics = InMemoryMetrics()
+    with pytest.raises(ValueError):
+        metrics.observe("gateway_request_duration_seconds", -1, {"route": "chat"})
+    assert metrics.snapshot().histograms == ()

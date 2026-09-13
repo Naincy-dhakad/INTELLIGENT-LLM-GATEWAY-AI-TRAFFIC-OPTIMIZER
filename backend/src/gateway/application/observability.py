@@ -1,6 +1,8 @@
 """Application-level observability ports and dependency-free implementations."""
 
 from collections import Counter
+from dataclasses import dataclass, field
+from math import isfinite
 from threading import Lock
 from typing import Mapping, Protocol
 
@@ -118,12 +120,34 @@ class MetricsObservability:
         self._delegate.observe(metric, value, labels)
 
 
+_MAX_DIAGNOSTIC_SAMPLES = 256
+
+
+@dataclass
+class _HistogramAccumulator:
+    """Bounded aggregate state for one metric and validated label set."""
+
+    bucket_counts: list[int]
+    count: int = 0
+    total: float = 0.0
+    diagnostic_samples: list[float] = field(default_factory=list)
+
+    def observe(self, value: float, buckets: tuple[float, ...]) -> None:
+        for index, bucket in enumerate(buckets):
+            if value <= bucket:
+                self.bucket_counts[index] += 1
+        self.count += 1
+        self.total += value
+        if len(self.diagnostic_samples) < _MAX_DIAGNOSTIC_SAMPLES:
+            self.diagnostic_samples.append(value)
+
+
 class InMemoryMetrics:
-    """Bounded-label test/local implementation; not a production metrics store."""
+    """Thread-safe bounded in-memory metrics implementation."""
 
     def __init__(self) -> None:
         self._counts: Counter[tuple[str, tuple[tuple[str, str], ...]]] = Counter()
-        self._observations: list[tuple[str, float, tuple[tuple[str, str], ...]]] = []
+        self._histograms: dict[tuple[str, tuple[tuple[str, str], ...]], _HistogramAccumulator] = {}
         self._lock = Lock()
 
     @staticmethod
@@ -144,41 +168,48 @@ class InMemoryMetrics:
         definition = metric_definition(metric)
         if definition.metric_type.value != "histogram":
             raise ValueError("metric is not a histogram")
-        if value < 0:
-            raise ValueError("histogram values must be non-negative")
+        if not isinstance(value, (int, float)) or isinstance(value, bool) or not isfinite(value) or value < 0:
+            raise ValueError("histogram values must be finite and non-negative")
         normalized_labels = self._labels(metric, labels)
         with self._lock:
-            self._observations.append((metric, float(value), normalized_labels))
+            key = (metric, normalized_labels)
+            accumulator = self._histograms.setdefault(
+                key,
+                _HistogramAccumulator(bucket_counts=[0] * len(definition.buckets)),
+            )
+            accumulator.observe(float(value), definition.buckets)
 
     def snapshot(self) -> MetricsSnapshot:
         """Return a copied, deterministic view without exposing mutable state."""
         with self._lock:
             counts = tuple(self._counts.items())
-            observations = tuple(self._observations)
+            histograms = tuple(
+                (
+                    name,
+                    labels,
+                    tuple(accumulator.bucket_counts),
+                    accumulator.count,
+                    accumulator.total,
+                    tuple(accumulator.diagnostic_samples),
+                )
+                for (name, labels), accumulator in self._histograms.items()
+            )
 
         counter_snapshots = tuple(
             CounterSnapshot(metric_definition(name), labels, value)
             for (name, labels), value in sorted(counts, key=lambda item: item[0])
         )
-        grouped: dict[tuple[str, tuple[tuple[str, str], ...]], list[float]] = {}
-        for name, value, labels in observations:
-            grouped.setdefault((name, labels), []).append(value)
-
         histogram_snapshots: list[HistogramSnapshot] = []
-        for (name, labels), values in sorted(grouped.items()):
+        for name, labels, bucket_counts, count, total, diagnostic_samples in sorted(histograms):
             definition = metric_definition(name)
-            bucket_counts = tuple(
-                (bucket, sum(value <= bucket for value in values))
-                for bucket in definition.buckets
-            )
             histogram_snapshots.append(
                 HistogramSnapshot(
                     definition=definition,
                     labels=labels,
-                    observations=tuple(values),
-                    bucket_counts=bucket_counts,
-                    count=len(values),
-                    sum=sum(values),
+                    observations=diagnostic_samples,
+                    bucket_counts=tuple(zip(definition.buckets, bucket_counts)),
+                    count=count,
+                    sum=total,
                 )
             )
         return MetricsSnapshot(tuple(counter_snapshots), tuple(histogram_snapshots))
@@ -188,5 +219,10 @@ class InMemoryMetrics:
             return dict(self._counts)
 
     def observations(self) -> tuple[tuple[str, float, tuple[tuple[str, str], ...]], ...]:
+        """Return bounded diagnostic samples, not the complete observation history."""
         with self._lock:
-            return tuple(self._observations)
+            return tuple(
+                (name, value, labels)
+                for (name, labels), accumulator in sorted(self._histograms.items())
+                for value in accumulator.diagnostic_samples
+            )

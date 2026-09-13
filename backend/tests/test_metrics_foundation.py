@@ -107,6 +107,23 @@ def test_noop_metrics_remains_optional():
 
 def test_in_memory_metrics_is_thread_safe():
     metrics = InMemoryMetrics()
+
+    def update(_):
+        metrics.increment("gateway_requests_total", {"outcome": "success"})
+        metrics.observe("gateway_request_duration_seconds", 0.1, {"route": "chat"})
+
     with ThreadPoolExecutor(max_workers=4) as pool:
-        list(pool.map(lambda _: metrics.increment("gateway_requests_total", {"outcome": "success"}), range(100)))
+        list(pool.map(update, range(100)))
     assert sum(metrics.counts().values()) == 100
+    assert metrics.snapshot().histograms[0].count == 100
+
+
+def test_histogram_label_sets_aggregate_independently():
+    metrics = InMemoryMetrics()
+    metrics.observe("gateway_request_duration_seconds", 0.005, {"route": "chat"})
+    metrics.observe("gateway_request_duration_seconds", 0.006, {"route": "health"})
+
+    histograms = {item.labels: item for item in metrics.snapshot().histograms}
+    assert histograms[(("route", "chat"),)].count == 1
+    assert histograms[(("route", "health"),)].count == 1
+    assert histograms[(("route", "chat"),)].sum == pytest.approx(0.005)

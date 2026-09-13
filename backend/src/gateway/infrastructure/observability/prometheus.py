@@ -37,17 +37,16 @@ class PrometheusMetricsExporter:
                 raise ValueError("metric type mismatch")
             if validate_labels(definition.name, dict(item.labels)) != item.labels:
                 raise ValueError("non-canonical metric labels")
-            if item.count != len(item.observations) or item.count < 0:
+            if not isinstance(item.count, int) or isinstance(item.count, bool) or item.count < 0 or len(item.observations) > item.count:
                 raise ValueError("invalid histogram count")
-            if not isfinite(item.sum) or any(not isfinite(value) or value < 0 for value in item.observations):
+            if not isfinite(item.sum) or item.sum < 0 or any(not isfinite(value) or value < 0 for value in item.observations):
                 raise ValueError("invalid histogram value")
             if tuple(bucket for bucket, _ in item.bucket_counts) != definition.buckets:
                 raise ValueError("invalid histogram buckets")
-            if any(count < 0 for _, count in item.bucket_counts):
+            bucket_values = tuple(count for _, count in item.bucket_counts)
+            if any(not isinstance(count, int) or isinstance(count, bool) or count < 0 for count in bucket_values):
                 raise ValueError("invalid histogram bucket count")
-            expected_counts = tuple(
-                sum(value <= bucket for value in item.observations)
-                for bucket in definition.buckets
-            )
-            if tuple(count for _, count in item.bucket_counts) != expected_counts:
-                raise ValueError("incoherent histogram buckets")
+            if any(left > right for left, right in zip(bucket_values, bucket_values[1:])):
+                raise ValueError("histogram buckets must be cumulative")
+            if bucket_values and bucket_values[-1] > item.count:
+                raise ValueError("histogram bucket count exceeds total")

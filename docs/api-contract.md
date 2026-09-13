@@ -379,3 +379,7 @@ The explicit runtime composition builds the public gateway and isolated manageme
 ## Phase 18 Step 15E runtime supervision
 
 The runtime coordinator constructs separate public and management Uvicorn servers with shared process-local metrics state. It provides explicit async startup, supervision, duplicate-start protection, isolated management failure handling, and graceful shutdown. The management server is constructed only when both metrics flags are enabled and is never started by import side effects or `create_app()`.
+
+## Phase 18 Step 17 bounded metrics aggregation
+
+Runtime histogram state is bounded per metric and validated label set. The authoritative snapshot fields are cumulative bucket counts, total count, and sum; Prometheus exposition is generated from those fields. Any diagnostic observation sample is bounded to at most 256 values per metric/label set and is non-authoritative. This does not change metric names, labels, public routes, management authentication, or process-local metrics semantics.

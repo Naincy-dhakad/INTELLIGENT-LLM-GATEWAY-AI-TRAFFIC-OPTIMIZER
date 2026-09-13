@@ -152,3 +152,7 @@ The first same-process runtime composition now builds separate public and manage
 ### Phase 18 Step 15E runtime supervision
 
 The explicit runtime coordinator can construct and supervise separate public and management Uvicorn servers in one process while sharing one in-memory metrics state. Management construction occurs only when both metrics flags are enabled; management startup failures are isolated from the public gateway. Server startup remains explicit and does not occur through module imports or `create_app()`.
+
+### Phase 18 Step 17 bounded metrics aggregation
+
+Runtime histogram metrics use bounded aggregate state for each metric and validated label set: cumulative bucket counts, total count, and sum. Prometheus exposition is rendered from those aggregate values. A bounded diagnostic sample of at most 256 values per metric/label set may be retained for compatibility, but raw observations are never retained without a fixed limit. Metrics remain process-local operational telemetry; PostgreSQL remains durable usage truth and Redis remains ephemeral rate-limit state.

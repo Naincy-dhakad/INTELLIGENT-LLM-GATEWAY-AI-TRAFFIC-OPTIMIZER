@@ -63,3 +63,14 @@ def test_snapshot_immutability_is_preserved():
     assert output
     metrics.increment("gateway_requests_total", {"route": "chat", "outcome": "success"})
     assert " 1\n" in PrometheusMetricsExporter().export(snapshot)
+
+
+def test_prometheus_histogram_uses_aggregate_count_sum_and_buckets():
+    metrics = InMemoryMetrics()
+    for value in (0.01, 0.25, 1.0):
+        metrics.observe("gateway_request_duration_seconds", value, {"route": "chat"})
+
+    output = PrometheusMetricsExporter().export(metrics.snapshot())
+    assert 'gateway_request_duration_seconds_bucket{route="chat",le="0.25"} 2' in output
+    assert 'gateway_request_duration_seconds_sum{route="chat"} 1.26' in output
+    assert 'gateway_request_duration_seconds_count{route="chat"} 3' in output
