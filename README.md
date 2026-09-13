@@ -148,3 +148,7 @@ The standalone management application now exposes `GET /metrics` only on its sep
 ### Phase 18 Step 15D management listener startup
 
 The first same-process runtime composition now builds separate public and management ASGI applications with one shared in-memory metrics state. A management server is constructed only when both metrics enablement flags are true; construction does not start a listener or bind a port. Production separate-process metrics aggregation remains deferred.
+
+### Phase 18 Step 15E runtime supervision
+
+The explicit runtime coordinator can construct and supervise separate public and management Uvicorn servers in one process while sharing one in-memory metrics state. Management construction occurs only when both metrics flags are enabled; management startup failures are isolated from the public gateway. Server startup remains explicit and does not occur through module imports or `create_app()`.

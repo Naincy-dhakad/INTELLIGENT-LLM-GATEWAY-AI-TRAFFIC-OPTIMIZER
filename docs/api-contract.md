@@ -375,3 +375,7 @@ The standalone management application exposes `GET /metrics` outside `/api/v1` a
 ## Phase 18 Step 15D management listener startup
 
 The explicit runtime composition builds the public gateway and isolated management applications with a shared in-memory metrics snapshot source. The management Uvicorn server is constructed only when both metrics flags are enabled and is not started by application import or `create_app()`. Listener startup supervision and production separate-process aggregation remain deployment concerns for later work.
+
+## Phase 18 Step 15E runtime supervision
+
+The runtime coordinator constructs separate public and management Uvicorn servers with shared process-local metrics state. It provides explicit async startup, supervision, duplicate-start protection, isolated management failure handling, and graceful shutdown. The management server is constructed only when both metrics flags are enabled and is never started by import side effects or `create_app()`.
