@@ -144,3 +144,7 @@ The future metrics management configuration is now typed and disabled by default
 ### Phase 18 Step 15B management metrics endpoint
 
 The standalone management application now exposes `GET /metrics` only on its separate application. A management listener specification is created only when both `METRICS_ENABLED=true` and `METRICS_MANAGEMENT_ENABLED=true`; public gateway routes remain unchanged. The endpoint is not authenticated yet, remains intended for the internal default bind host, and returns a safe `503 metrics temporarily unavailable` on snapshot or exporter failure.
+
+### Phase 18 Step 15D management listener startup
+
+The first same-process runtime composition now builds separate public and management ASGI applications with one shared in-memory metrics state. A management server is constructed only when both metrics enablement flags are true; construction does not start a listener or bind a port. Production separate-process metrics aggregation remains deferred.

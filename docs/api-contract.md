@@ -371,3 +371,7 @@ Future metrics exposure settings are typed and disabled by default. The local de
 ## Phase 18 Step 15B management metrics endpoint
 
 The standalone management application exposes `GET /metrics` outside `/api/v1` and returns Prometheus-compatible text from the injected read-only snapshot source and exporter. It is not registered on the public gateway. Listener configuration is enabled only when both metrics exposure flags are true. Operator authentication, mTLS, and token validation remain deferred.
+
+## Phase 18 Step 15D management listener startup
+
+The explicit runtime composition builds the public gateway and isolated management applications with a shared in-memory metrics snapshot source. The management Uvicorn server is constructed only when both metrics flags are enabled and is not started by application import or `create_app()`. Listener startup supervision and production separate-process aggregation remain deployment concerns for later work.

@@ -31,5 +31,5 @@ def create_management_listener(
     return ManagementListenerSpec(
         host=settings.metrics_bind_host,
         port=settings.metrics_bind_port,
-        app=create_management_app(snapshot_source, exporter),
+        app=create_management_app(snapshot_source, exporter, settings=settings),
     )
