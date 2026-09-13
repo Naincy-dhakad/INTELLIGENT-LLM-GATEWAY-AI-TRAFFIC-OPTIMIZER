@@ -12,11 +12,11 @@ from gateway.infrastructure.management_listener import create_management_listene
 from gateway.main import create_app
 
 
-@dataclass
 def token_settings():
     return Settings(_env_file=None, metrics_auth_mode="token", metrics_operator_token="test-token")
 
 
+@dataclass
 class RecordingExporter:
     rendered: str = "metric_output\n"
     received: object | None = None
