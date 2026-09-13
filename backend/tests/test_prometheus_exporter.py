@@ -74,3 +74,14 @@ def test_prometheus_histogram_uses_aggregate_count_sum_and_buckets():
     assert 'gateway_request_duration_seconds_bucket{route="chat",le="0.25"} 2' in output
     assert 'gateway_request_duration_seconds_sum{route="chat"} 1.26' in output
     assert 'gateway_request_duration_seconds_count{route="chat"} 3' in output
+
+
+def test_prometheus_output_remains_aggregate_after_many_observations():
+    metrics = InMemoryMetrics()
+    for _ in range(5_000):
+        metrics.observe("gateway_request_duration_seconds", 0.1, {"route": "chat"})
+
+    output = PrometheusMetricsExporter().export(metrics.snapshot())
+    assert 'gateway_request_duration_seconds_count{route="chat"} 5000' in output
+    assert 'gateway_request_duration_seconds_sum{route="chat"} 500' in output
+    assert 'gateway_request_duration_seconds_bucket{route="chat",le="0.1"} 5000' in output

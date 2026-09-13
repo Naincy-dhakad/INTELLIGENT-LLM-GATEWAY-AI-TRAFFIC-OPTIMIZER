@@ -100,3 +100,13 @@ def test_invalid_histogram_observation_does_not_mutate_aggregate_state():
     with pytest.raises(ValueError):
         metrics.observe("gateway_request_duration_seconds", -1, {"route": "chat"})
     assert metrics.snapshot().histograms == ()
+
+
+def test_repeated_updates_use_one_bounded_accumulator_per_label_set():
+    metrics = InMemoryMetrics()
+    for _ in range(2_000):
+        metrics.observe("gateway_request_duration_seconds", 0.1, {"route": "chat"})
+
+    assert len(metrics._histograms) == 1
+    assert len(metrics._histograms[("gateway_request_duration_seconds", (("route", "chat"),))].diagnostic_samples) == 256
+    assert metrics.snapshot().histograms[0].count == 2_000
