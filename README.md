@@ -140,3 +140,7 @@ The application now defines a technology-neutral `MetricsExporter` contract and 
 ### Phase 18 Step 14 metrics configuration contract
 
 The future metrics management configuration is now typed and disabled by default: `METRICS_ENABLED=false`, `METRICS_MANAGEMENT_ENABLED=false`, `METRICS_BIND_HOST=127.0.0.1`, `METRICS_BIND_PORT=9090`, and `METRICS_AUTH_MODE=mtls`. `METRICS_OPERATOR_TOKEN` is optional and secret-protected. These settings do not enable metrics exposition, `/metrics`, a management listener, or operator authentication.
+
+### Phase 18 Step 15B management metrics endpoint
+
+The standalone management application now exposes `GET /metrics` only on its separate application. A management listener specification is created only when both `METRICS_ENABLED=true` and `METRICS_MANAGEMENT_ENABLED=true`; public gateway routes remain unchanged. The endpoint is not authenticated yet, remains intended for the internal default bind host, and returns a safe `503 metrics temporarily unavailable` on snapshot or exporter failure.

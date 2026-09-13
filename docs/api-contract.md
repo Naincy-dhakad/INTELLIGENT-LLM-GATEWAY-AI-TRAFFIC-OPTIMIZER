@@ -367,3 +367,7 @@ A read-only `MetricsExporter` protocol and deterministic text renderer now consu
 ## Phase 18 Step 14 metrics configuration contract
 
 Future metrics exposure settings are typed and disabled by default. The local default is `METRICS_BIND_HOST=127.0.0.1`, port `9090`, and `METRICS_AUTH_MODE=mtls`; the optional operator token is secret-protected. This configuration contract does not register `/metrics`, start a management listener, or implement authentication.
+
+## Phase 18 Step 15B management metrics endpoint
+
+The standalone management application exposes `GET /metrics` outside `/api/v1` and returns Prometheus-compatible text from the injected read-only snapshot source and exporter. It is not registered on the public gateway. Listener configuration is enabled only when both metrics exposure flags are true. Operator authentication, mTLS, and token validation remain deferred.
