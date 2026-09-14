@@ -156,3 +156,13 @@ The explicit runtime coordinator can construct and supervise separate public and
 ### Phase 18 Step 17 bounded metrics aggregation
 
 Runtime histogram metrics use bounded aggregate state for each metric and validated label set: cumulative bucket counts, total count, and sum. Prometheus exposition is rendered from those aggregate values. A bounded diagnostic sample of at most 256 values per metric/label set may be retained for compatibility, but raw observations are never retained without a fixed limit. Metrics remain process-local operational telemetry; PostgreSQL remains durable usage truth and Redis remains ephemeral rate-limit state.
+
+### Explicit dual-listener runtime
+
+For the same-process public and optional management listeners, use the explicit runtime entrypoint from `backend`:
+
+```bash
+PYTHONPATH=src python -m gateway.runtime
+```
+
+This composes and supervises the existing public and management Uvicorn servers. The management listener remains disabled unless both metrics enablement flags are true. The existing public-only command, `python -m uvicorn gateway.main:app --reload`, remains supported for development.

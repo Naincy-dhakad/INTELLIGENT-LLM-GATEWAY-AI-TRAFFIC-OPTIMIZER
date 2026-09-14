@@ -383,3 +383,7 @@ The runtime coordinator constructs separate public and management Uvicorn server
 ## Phase 18 Step 17 bounded metrics aggregation
 
 Runtime histogram state is bounded per metric and validated label set. The authoritative snapshot fields are cumulative bucket counts, total count, and sum; Prometheus exposition is generated from those fields. Any diagnostic observation sample is bounded to at most 256 values per metric/label set and is non-authoritative. This does not change metric names, labels, public routes, management authentication, or process-local metrics semantics.
+
+## Explicit dual-listener runtime
+
+The same-process public and optional management listeners can be started explicitly with `PYTHONPATH=src python -m gateway.runtime` from `backend`. This entrypoint composes the existing runtime coordinator, supervises the public runtime, and shuts down both listeners. It does not start listeners during import or change the public `gateway.main:app` entrypoint.
