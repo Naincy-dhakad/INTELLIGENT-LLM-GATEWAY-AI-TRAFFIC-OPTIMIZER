@@ -166,3 +166,7 @@ PYTHONPATH=src python -m gateway.runtime
 ```
 
 This composes and supervises the existing public and management Uvicorn servers. The management listener remains disabled unless both metrics enablement flags are true. The existing public-only command, `python -m uvicorn gateway.main:app --reload`, remains supported for development.
+
+### Database startup safety
+
+With `USAGE_TRACKING_ENABLED=false`, PostgreSQL is not required for gateway startup. When usage tracking is enabled, run `cd backend && alembic upgrade head` separately before starting the application. The explicit runtime performs read-only connectivity, transaction, Alembic-head, revision, and usage-table checks before listeners accept traffic; it never runs migrations itself. A failed startup check stops the runtime without exposing database details.

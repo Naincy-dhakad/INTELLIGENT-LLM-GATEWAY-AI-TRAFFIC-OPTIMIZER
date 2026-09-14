@@ -26,11 +26,6 @@ from gateway.infrastructure.providers.openai import OpenAIProvider
 from gateway.infrastructure.rate_limiter import RedisRateLimiter
 
 
-class _UnavailableUsageRepository:
-    def record_usage(self, _record) -> None:
-        raise RuntimeError("usage repository unavailable")
-
-
 def create_app(observability: ObservabilityPort | None = None) -> FastAPI:
     settings = get_settings()
     observability = MetricsObservability(observability or NoopObservability())
@@ -47,17 +42,15 @@ def create_app(observability: ObservabilityPort | None = None) -> FastAPI:
         if settings.rate_limit_enabled
         else DisabledRateLimiter()
     )
+    database_resource = None
     usage_repository = None
     if settings.usage_tracking_enabled:
-        try:
-            from gateway.infrastructure.database.repositories import SqlAlchemyUsageRecordRepository
-            from gateway.infrastructure.database.session import create_session_factory
+        from gateway.infrastructure.database.repositories import SqlAlchemyUsageRecordRepository
+        from gateway.infrastructure.database.session import DatabaseResource
 
-            usage_repository = SqlAlchemyUsageRecordRepository(
-                create_session_factory(settings.database_url)
-            )
-        except Exception:
-            usage_repository = _UnavailableUsageRepository()
+        database_resource = DatabaseResource.create(settings.database_url)
+        usage_repository = SqlAlchemyUsageRecordRepository(database_resource)
+    app.state.database_resource = database_resource
     app.state.usage_recorder = UsageRecorder(
         usage_repository, settings.usage_tracking_enabled
     )

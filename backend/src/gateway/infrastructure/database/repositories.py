@@ -5,11 +5,13 @@ from sqlalchemy.orm import sessionmaker
 
 from gateway.application.usage_tracking import UsageRecord
 from gateway.infrastructure.database.models import GatewayUsageRecordModel
+from gateway.infrastructure.database.session import DatabaseResource
 
 
 class SqlAlchemyUsageRecordRepository:
-    def __init__(self, session_factory: sessionmaker) -> None:
-        self._session_factory = session_factory
+    def __init__(self, resource: DatabaseResource) -> None:
+        self._resource = resource
+        self._session_factory = resource.session_factory
 
     def record_usage(self, record: UsageRecord) -> None:
         model = GatewayUsageRecordModel(

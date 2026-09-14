@@ -387,3 +387,7 @@ Runtime histogram state is bounded per metric and validated label set. The autho
 ## Explicit dual-listener runtime
 
 The same-process public and optional management listeners can be started explicitly with `PYTHONPATH=src python -m gateway.runtime` from `backend`. This entrypoint composes the existing runtime coordinator, supervises the public runtime, and shuts down both listeners. It does not start listeners during import or change the public `gateway.main:app` entrypoint.
+
+## Database startup and migration safety
+
+Usage tracking disabled remains a no-database startup mode. When usage tracking is enabled, deployment must run `alembic upgrade head` separately. The application uses one owned SQLAlchemy resource and performs read-only connectivity and schema checks, requiring the database revision to match the single deployed Alembic head before listeners start. Application startup never mutates the schema, and `/health` remains unchanged.

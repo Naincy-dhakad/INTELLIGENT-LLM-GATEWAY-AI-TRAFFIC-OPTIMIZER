@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from gateway.application.metrics import MetricsSnapshot
 from gateway.application.observability import InMemoryMetrics
 from gateway.config.settings import Settings, get_settings
+from gateway.infrastructure.database.session import DatabaseResource, DatabaseStartupError
 from gateway.infrastructure.management_listener import ManagementListenerSpec, create_management_listener
 from gateway.infrastructure.management_server import create_management_server
 from gateway.infrastructure.observability.prometheus import PrometheusMetricsExporter
@@ -90,14 +91,27 @@ class GatewayRuntime:
     public_task: asyncio.Task | None = None
     management_task: asyncio.Task | None = None
     management_failure: str | None = None
+    database_resource: DatabaseResource | None = None
+    _database_disposed: bool = False
 
     async def start(self) -> None:
         if self.state is not RuntimeState.CONSTRUCTED:
             raise RuntimeStateError(f"runtime cannot start from {self.state.value}")
         self.state = RuntimeState.STARTING
+        try:
+            if self.database_resource is not None:
+                self.database_resource.validate_startup()
+        except DatabaseStartupError as error:
+            self.state = RuntimeState.STOPPED
+            self._dispose_database()
+            _safe_log("database_startup_check_failed", outcome="failure", error_category=error.category.value)
+            raise
         if self.public_server is None:
             self.state = RuntimeState.STOPPED
+            self._dispose_database()
             raise RuntimeStateError("public server is not constructed")
+        if self.database_resource is not None:
+            _safe_log("database_startup_check_succeeded", outcome="success")
         _safe_log("gateway_listener_starting", outcome="success")
         self.public_task = asyncio.create_task(_invoke(self.public_server, "serve"))
         self.public_task.add_done_callback(self._public_done)
@@ -117,6 +131,7 @@ class GatewayRuntime:
             if error is not None:
                 _safe_log("gateway_listener_start_failed", outcome="failure", error_category="startup_failure")
                 await self._stop_management()
+                self._dispose_database()
                 raise error
         self.state = RuntimeState.RUNNING
         _safe_log("gateway_listener_started", outcome="success")
@@ -136,7 +151,13 @@ class GatewayRuntime:
         self.state = RuntimeState.STOPPING
         await self._stop_management()
         await self._stop_server(self.public_server, self.public_task, "gateway_listener_stopped")
+        self._dispose_database()
         self.state = RuntimeState.STOPPED
+
+    def _dispose_database(self) -> None:
+        if self.database_resource is not None and not self._database_disposed:
+            self.database_resource.dispose()
+            self._database_disposed = True
 
     async def _stop_management(self) -> None:
         if self.management_server is None and self.management_task is None:
@@ -208,4 +229,5 @@ def create_gateway_runtime(
         management_server=management_server,
         public_server=public_server,
         management_failure=management_failure,
+        database_resource=getattr(public_app.state, "database_resource", None),
     )
