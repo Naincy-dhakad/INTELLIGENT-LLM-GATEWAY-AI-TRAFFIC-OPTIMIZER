@@ -79,6 +79,7 @@ def test_structured_logger_serializes_only_event_fields(caplog):
         sink.emit(event)
     payload = json.loads(caplog.records[0].message)
     assert payload["event"] == "gateway_request_completed"
-    assert payload["request_id"] == REQUEST_ID
+    assert "request_id" not in payload
+    assert "principal_id" not in payload
     assert "prompt" not in payload
     assert "api_key" not in payload

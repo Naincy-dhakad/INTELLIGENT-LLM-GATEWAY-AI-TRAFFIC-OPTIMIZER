@@ -13,4 +13,9 @@ class StructuredEventLogger:
         self._logger = logger or logging.getLogger("gateway.observability")
 
     def emit(self, event: ObservabilityEvent) -> None:
-        self._logger.info(json.dumps(event.as_dict(), sort_keys=True, separators=(",", ":")))
+        payload = {
+            key: value
+            for key, value in event.as_dict().items()
+            if key not in {"request_id", "principal_id"}
+        }
+        self._logger.info(json.dumps(payload, sort_keys=True, separators=(",", ":")))

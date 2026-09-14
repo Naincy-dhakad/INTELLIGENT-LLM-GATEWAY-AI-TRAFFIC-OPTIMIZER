@@ -32,13 +32,13 @@ def create_app(observability: ObservabilityPort | None = None) -> FastAPI:
     app = FastAPI(title=settings.app_name, version="0.1.0")
     app.state.observability = observability
     app.state.gateway_authenticator = GatewayAuthenticator(
-        settings.gateway_auth_enabled, settings.gateway_api_keys
+        settings.gateway_auth_enabled, settings.gateway_api_keys.get_secret_value()
     )
     app.state.rate_limit_enabled = settings.rate_limit_enabled
     app.state.rate_limit_requests = settings.rate_limit_requests
     app.state.rate_limit_window_seconds = settings.rate_limit_window_seconds
     app.state.rate_limiter = (
-        RedisRateLimiter(settings.redis_url)
+        RedisRateLimiter(settings.redis_url.get_secret_value())
         if settings.rate_limit_enabled
         else DisabledRateLimiter()
     )
@@ -48,7 +48,7 @@ def create_app(observability: ObservabilityPort | None = None) -> FastAPI:
         from gateway.infrastructure.database.repositories import SqlAlchemyUsageRecordRepository
         from gateway.infrastructure.database.session import DatabaseResource
 
-        database_resource = DatabaseResource.create(settings.database_url)
+        database_resource = DatabaseResource.create(settings.database_url.get_secret_value())
         usage_repository = SqlAlchemyUsageRecordRepository(database_resource)
     app.state.database_resource = database_resource
     app.state.usage_recorder = UsageRecorder(

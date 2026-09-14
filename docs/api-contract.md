@@ -391,3 +391,7 @@ The same-process public and optional management listeners can be started explici
 ## Database startup and migration safety
 
 Usage tracking disabled remains a no-database startup mode. When usage tracking is enabled, deployment must run `alembic upgrade head` separately. The application uses one owned SQLAlchemy resource and performs read-only connectivity and schema checks, requiring the database revision to match the single deployed Alembic head before listeners start. Application startup never mutates the schema, and `/health` remains unchanged.
+
+## Phase 22B production configuration and secret safety
+
+Configuration remains environment-injected. Development retains the mock-safe defaults and does not require PostgreSQL or Redis when usage tracking and rate limiting are disabled. Production configuration fails closed for missing gateway authentication keys, selected-provider credentials, enabled Redis/PostgreSQL dependencies, and management operator authentication. Secret-bearing settings are represented safely and are extracted only at infrastructure boundaries. Database migrations remain a separate deployment operation; application startup only performs the existing read-only database safety checks. Secrets, credentials, URLs containing credentials, prompts, completions, and raw exceptions are not exposed through API errors, logs, events, metrics, or management exposition.

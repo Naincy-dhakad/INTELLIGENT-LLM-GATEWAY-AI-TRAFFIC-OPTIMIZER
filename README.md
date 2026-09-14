@@ -170,3 +170,9 @@ This composes and supervises the existing public and management Uvicorn servers.
 ### Database startup safety
 
 With `USAGE_TRACKING_ENABLED=false`, PostgreSQL is not required for gateway startup. When usage tracking is enabled, run `cd backend && alembic upgrade head` separately before starting the application. The explicit runtime performs read-only connectivity, transaction, Alembic-head, revision, and usage-table checks before listeners accept traffic; it never runs migrations itself. A failed startup check stops the runtime without exposing database details.
+
+### Phase 22B production configuration and secret safety
+
+Development keeps the local mock-safe defaults: `APP_ENV=development`, `DEFAULT_PROVIDER_ID=phase3-mock`, gateway authentication disabled, and usage tracking/rate limiting disabled unless explicitly enabled. PostgreSQL and Redis are not required for that mode.
+
+Production must use `APP_ENV=production`, enable gateway authentication with injected `GATEWAY_API_KEYS`, select a configured non-mock provider, and inject the selected provider credential. When enabled, Redis rate limiting and PostgreSQL usage tracking require non-placeholder production URLs. Management metrics require both metrics flags and authenticated token mode; the operator token is injected through the environment. Secrets must never be committed, logged, included in metrics, or returned by API errors. Run `alembic upgrade head` separately before starting a usage-tracking deployment; application startup never runs migrations.
