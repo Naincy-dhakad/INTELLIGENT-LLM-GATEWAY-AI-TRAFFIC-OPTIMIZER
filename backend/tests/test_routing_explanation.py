@@ -123,8 +123,16 @@ def test_route_attaches_trace_from_the_single_routing_pass():
     )
 
 
-@pytest.mark.parametrize("requested_provider_id", [None, "openai"])
-def test_unavailable_capability_preserves_original_routing_error(requested_provider_id):
+@pytest.mark.parametrize(
+    "requested_provider_id, expected_category",
+    [
+        (None, RoutingErrorCategory.NO_ELIGIBLE_PROVIDER),
+        ("openai", RoutingErrorCategory.UNSUPPORTED_CAPABILITY),
+    ],
+)
+def test_unavailable_capability_preserves_original_routing_error(
+    requested_provider_id, expected_category
+):
     candidate = RoutingCandidate(
         provider_id="openai",
         provider_name="openai",
@@ -142,4 +150,4 @@ def test_unavailable_capability_preserves_original_routing_error(requested_provi
     with pytest.raises(RoutingError) as raised:
         DeterministicRoutingPolicy().route(request, (candidate,), default_provider_id="openai")
 
-    assert raised.value.category is RoutingErrorCategory.UNSUPPORTED_CAPABILITY
+    assert raised.value.category is expected_category
