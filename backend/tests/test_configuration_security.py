@@ -72,9 +72,9 @@ def test_selected_ollama_requires_safe_url_and_model():
 
 def test_production_rejects_local_dependency_placeholders():
     with pytest.raises(ValidationError, match="REDIS_URL"):
-        production_settings(redis_url="redis://localhost:6379/0")
+        production_settings(redis_url="redis://localhost:6379/0", rate_limit_enabled=True)
     with pytest.raises(ValidationError, match="DATABASE_URL"):
-        production_settings(database_url="postgresql+psycopg://gateway:gateway@localhost:5432/gateway")
+        production_settings(database_url="postgresql+psycopg://gateway:gateway@localhost:5432/gateway", usage_tracking_enabled=True)
 
 
 def test_production_management_token_mode_requires_operator_token():
