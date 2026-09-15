@@ -21,6 +21,8 @@ from gateway.domain.routing import (
     DeterministicRoutingPolicy,
     RoutingCandidate,
     RoutingRequest,
+    RoutingError,
+    RoutingErrorCategory,
 )
 
 
@@ -119,3 +121,25 @@ def test_route_attaches_trace_from_the_single_routing_pass():
         decision.selected_provider_id,
         decision.selected_model_id,
     )
+
+
+@pytest.mark.parametrize("requested_provider_id", [None, "openai"])
+def test_unavailable_capability_preserves_original_routing_error(requested_provider_id):
+    candidate = RoutingCandidate(
+        provider_id="openai",
+        provider_name="openai",
+        capabilities=frozenset({Capability.TEXT_GENERATION}),
+        model_ids=("gpt",),
+        supports_streaming=False,
+    )
+    request = RoutingRequest(
+        requested_provider_id,
+        None,
+        frozenset({Capability.REASONING}),
+        "balanced",
+    )
+
+    with pytest.raises(RoutingError) as raised:
+        DeterministicRoutingPolicy().route(request, (candidate,), default_provider_id="openai")
+
+    assert raised.value.category is RoutingErrorCategory.UNSUPPORTED_CAPABILITY

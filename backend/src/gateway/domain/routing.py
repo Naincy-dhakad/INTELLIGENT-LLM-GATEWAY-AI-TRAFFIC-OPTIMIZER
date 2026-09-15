@@ -333,7 +333,11 @@ class _RoutingTraceCollector:
     def __init__(self, request: RoutingRequest, candidates: tuple[RoutingCandidate, ...]) -> None:
         self._items: dict[tuple[str, str], CandidateExplanation] = {}
         available = frozenset().union(*(candidate.capabilities for candidate in candidates))
-        self._capabilities = CapabilityExplanation(request.required_capabilities, available)
+        self._capabilities = CapabilityExplanation(
+            request.required_capabilities,
+            available,
+            request.required_capabilities - available,
+        )
         self._constraints = ConstraintExplanation(
             cost_limit_configured=request.max_cost_usd is not None,
             latency_limit_configured=request.max_latency_ms is not None,
