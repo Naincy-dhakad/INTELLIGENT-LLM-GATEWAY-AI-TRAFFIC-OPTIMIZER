@@ -16,6 +16,7 @@ from gateway.domain.provider import (
     HealthStatus,
 )
 from gateway.domain.provider_registry import ProviderRegistry
+from gateway.domain.routing import DeterministicRoutingPolicy, RoutingCandidate, RoutingRequest
 
 
 @dataclass
@@ -65,9 +66,55 @@ def service(primary, fallback=None, **kwargs):
     return ChatService(ProviderRegistry(providers, primary.provider_id), **kwargs)
 
 
+class SpyRoutingPolicy:
+    def __init__(self, decision):
+        self._decision = decision
+        self.calls = 0
+
+    def route(self, routing_request, candidates, *, default_provider_id=None):
+        self.calls += 1
+        return self._decision
+
+    def fallback_options(self, routing_request, candidates, *, default_provider_id=None, attempted=frozenset()):
+        return (
+            (
+                RoutingCandidate(
+                    provider_id="fallback",
+                    provider_name="fallback",
+                    capabilities=frozenset({Capability.TEXT_GENERATION}),
+                    model_ids=("model",),
+                    supports_streaming=False,
+                ),
+                "model",
+            ),
+        )
+
+
+def make_decision(provider_id: str = "primary", model_id: str = "model"):
+    candidate = RoutingCandidate(
+        provider_id=provider_id,
+        provider_name=provider_id,
+        capabilities=frozenset({Capability.TEXT_GENERATION}),
+        model_ids=(model_id,),
+        supports_streaming=False,
+    )
+    return DeterministicRoutingPolicy().route(
+        RoutingRequest(None, None, frozenset({Capability.TEXT_GENERATION}), "balanced"),
+        (candidate,),
+        default_provider_id=provider_id,
+    )
+
+
 def test_successful_first_attempt_has_no_retry_or_fallback():
+    decision = make_decision()
+    policy = SpyRoutingPolicy(decision)
     primary = FakeProvider("primary")
-    result = service(primary).complete(request(), context())
+    result = service(primary, routing_policy=policy).complete(request(), context())
+    assert policy.calls == 1
+    assert result.routing_trace is decision.trace
+    assert result.routing_trace is result.routing_decision.trace
+    assert result.provider_response.provider_id == result.routing_decision.selected_provider_id == "primary"
+    assert result.provider_response.model == result.routing_decision.selected_model_id == "model"
     assert result.fallback_used is False
     assert result.attempt_count == 1
     assert len(primary.calls) == 1
@@ -98,6 +145,33 @@ def test_retry_and_fallback_are_bounded_and_fallback_is_deterministic():
     assert result.attempt_count == 3
     assert len(primary.calls) == 2
     assert len(fallback.calls) == 1
+
+
+def test_retry_preserves_the_same_routing_trace_object():
+    decision = make_decision()
+    policy = SpyRoutingPolicy(decision)
+    primary = FakeProvider("primary", [error(ProviderErrorCategory.UNAVAILABLE), "success"])
+    result = service(primary, routing_policy=policy).complete(request(), context())
+    assert policy.calls == 1
+    assert result.routing_trace is decision.trace
+    assert result.routing_trace is result.routing_decision.trace
+    assert result.attempt_count == 2
+    assert result.provider_response.provider_id == decision.selected_provider_id
+    assert result.provider_response.model == decision.selected_model_id
+
+
+def test_fallback_preserves_the_same_routing_trace_object():
+    decision = make_decision()
+    policy = SpyRoutingPolicy(decision)
+    primary = FakeProvider("primary", [error(ProviderErrorCategory.UNAVAILABLE), error(ProviderErrorCategory.TIMEOUT)])
+    fallback = FakeProvider("fallback")
+    result = service(primary, fallback, routing_policy=policy).complete(request(), context())
+    assert policy.calls == 1
+    assert result.routing_trace is decision.trace
+    assert result.routing_trace is result.routing_decision.trace
+    assert result.fallback_used is True
+    assert result.provider_response.provider_id == fallback.provider_id
+    assert result.provider_response.model == "model"
 
 
 def test_explicit_provider_prevents_cross_provider_fallback():

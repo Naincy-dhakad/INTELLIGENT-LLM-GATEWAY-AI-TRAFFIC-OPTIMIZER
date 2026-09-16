@@ -32,6 +32,7 @@ from gateway.domain.routing import (
     RoutingDecision,
     RoutingError,
     RoutingRequest,
+    RoutingTrace,
 )
 
 
@@ -42,6 +43,7 @@ class ChatExecutionResult:
     classification: ClassificationResult
     fallback_used: bool = False
     attempt_count: int = 1
+    routing_trace: RoutingTrace | None = None
 
 
 class ChatService:
@@ -140,7 +142,14 @@ class ChatService:
                     primary, base_request, context, attempt_count,
                     "initial" if attempt_count == 1 else "retry",
                 )
-                return ChatExecutionResult(response, decision, classification, False, attempt_count)
+                return ChatExecutionResult(
+                    response,
+                    decision,
+                    classification,
+                    False,
+                    attempt_count,
+                    decision.trace,
+                )
             except ProviderError as error:
                 last_error = error
                 if not RetryPolicy.is_retryable(error.category):
@@ -199,7 +208,14 @@ class ChatService:
                             fallback_provider, fallback_request, context,
                             attempt_count, "fallback",
                         )
-                        return ChatExecutionResult(response, decision, classification, True, attempt_count)
+                        return ChatExecutionResult(
+                            response,
+                            decision,
+                            classification,
+                            True,
+                            attempt_count,
+                            decision.trace,
+                        )
                     except ProviderError as error:
                         last_error = error
 
