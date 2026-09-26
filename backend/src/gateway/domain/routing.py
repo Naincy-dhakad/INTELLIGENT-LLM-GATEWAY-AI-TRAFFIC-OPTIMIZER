@@ -301,6 +301,80 @@ class RoutingExplanation:
         if self.selection is not None and self.selection.selected not in tuple(item.evaluation for item in self.candidates):
             raise ValueError("selected candidate must be present in candidates")
 
+    @classmethod
+    def from_trace(
+        cls,
+        trace: RoutingTrace,
+        *,
+        request: RoutingRequest | None = None,
+        classification: ClassificationResult | None = None,
+        decision: RoutingDecision,
+    ) -> "RoutingExplanation":
+        if trace is None:
+            raise ValueError("routing trace is required to build a routing explanation")
+        if trace.objective is None:
+            raise ValueError("routing trace must include its objective")
+        if trace.policy_version is None:
+            raise ValueError("routing trace must include its policy version")
+        if trace.capabilities is None:
+            raise ValueError("routing trace must include its capability explanation")
+        if trace.constraints is None:
+            raise ValueError("routing trace must include its constraint explanation")
+        if trace.budget is None:
+            raise ValueError("routing trace must include its budget explanation")
+        if decision is None:
+            raise ValueError("a routing decision is required to build a routing explanation")
+
+        if request is not None and request.objective != trace.objective:
+            raise ValueError("request objective must match the trace objective")
+
+        selected = next(
+            (item.evaluation for item in trace.evaluations if item.evaluation.status is CandidateEvaluationStatus.SELECTED),
+            None,
+        )
+        if selected is None:
+            raise ValueError("routing trace must include a selected candidate")
+
+        if trace.policy_version != decision.policy_version:
+            raise ValueError("trace policy version must match the routing decision")
+        if selected.provider_id != decision.selected_provider_id or selected.model_id != decision.selected_model_id:
+            raise ValueError("selected candidate in the trace must match the routing decision")
+
+        classification_explanation = None
+        if classification is not None:
+            classification_explanation = ClassificationExplanation(
+                classification.category,
+                classification.complexity_level,
+                classification.complexity_score,
+                classification.matched_signals,
+            )
+
+        alternatives = tuple(
+            item.evaluation
+            for item in trace.evaluations
+            if item.evaluation.status in (CandidateEvaluationStatus.ELIGIBLE, CandidateEvaluationStatus.EXCLUDED)
+            and item.evaluation != selected
+        )
+        selection = SelectionExplanation(
+            objective=trace.objective,
+            policy_version=trace.policy_version,
+            reason=decision.reason,
+            selected=selected,
+            alternatives=alternatives,
+        )
+
+        return cls(
+            policy_version=trace.policy_version,
+            objective=trace.objective,
+            classification=classification_explanation,
+            capabilities=trace.capabilities,
+            budget=trace.budget,
+            constraints=trace.constraints,
+            candidates=trace.evaluations,
+            selection=selection,
+            trace=trace,
+        )
+
 
 @dataclass(frozen=True)
 class _PreferenceScore:

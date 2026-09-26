@@ -28,6 +28,8 @@ def test_chat_returns_normalized_phase3_provider_response() -> None:
     assert payload["routing"]["decision_reason"] == (
         'Default provider "phase3-mock" selected because no provider was explicitly requested.'
     )
+    assert "routing_explanation" not in payload
+    assert "routing_trace" not in payload
     assert response.headers["X-Request-ID"] == payload["request_id"]
 
 

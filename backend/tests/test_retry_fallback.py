@@ -16,7 +16,7 @@ from gateway.domain.provider import (
     HealthStatus,
 )
 from gateway.domain.provider_registry import ProviderRegistry
-from gateway.domain.routing import DeterministicRoutingPolicy, RoutingCandidate, RoutingRequest
+from gateway.domain.routing import DeterministicRoutingPolicy, RoutingCandidate, RoutingExplanation, RoutingRequest
 
 
 @dataclass
@@ -113,6 +113,10 @@ def test_successful_first_attempt_has_no_retry_or_fallback():
     assert policy.calls == 1
     assert result.routing_trace is decision.trace
     assert result.routing_trace is result.routing_decision.trace
+    assert result.routing_explanation is not None
+    assert result.routing_explanation.trace is decision.trace
+    assert result.routing_explanation.selection is not None
+    assert result.routing_explanation.selection.reason == result.routing_decision.reason
     assert result.provider_response.provider_id == result.routing_decision.selected_provider_id == "primary"
     assert result.provider_response.model == result.routing_decision.selected_model_id == "model"
     assert result.fallback_used is False
@@ -147,28 +151,58 @@ def test_retry_and_fallback_are_bounded_and_fallback_is_deterministic():
     assert len(fallback.calls) == 1
 
 
-def test_retry_preserves_the_same_routing_trace_object():
+def test_retry_preserves_the_same_routing_explanation_and_trace_object(monkeypatch):
     decision = make_decision()
     policy = SpyRoutingPolicy(decision)
     primary = FakeProvider("primary", [error(ProviderErrorCategory.UNAVAILABLE), "success"])
+    explanations = []
+    original_from_trace = RoutingExplanation.from_trace
+
+    def capture_explanation(trace, **kwargs):
+        result = original_from_trace(trace, **kwargs)
+        explanations.append(result)
+        return result
+
+    monkeypatch.setattr(RoutingExplanation, "from_trace", staticmethod(capture_explanation))
     result = service(primary, routing_policy=policy).complete(request(), context())
     assert policy.calls == 1
+    assert len(explanations) == 1
+    assert result.routing_explanation is explanations[0]
     assert result.routing_trace is decision.trace
     assert result.routing_trace is result.routing_decision.trace
+    assert result.routing_explanation is not None
+    assert result.routing_explanation.trace is decision.trace
+    assert result.routing_explanation.selection is not None
+    assert result.routing_explanation.selection.reason == result.routing_decision.reason
     assert result.attempt_count == 2
     assert result.provider_response.provider_id == decision.selected_provider_id
     assert result.provider_response.model == decision.selected_model_id
 
 
-def test_fallback_preserves_the_same_routing_trace_object():
+def test_fallback_preserves_the_same_routing_explanation_and_trace_object(monkeypatch):
     decision = make_decision()
     policy = SpyRoutingPolicy(decision)
     primary = FakeProvider("primary", [error(ProviderErrorCategory.UNAVAILABLE), error(ProviderErrorCategory.TIMEOUT)])
     fallback = FakeProvider("fallback")
+    explanations = []
+    original_from_trace = RoutingExplanation.from_trace
+
+    def capture_explanation(trace, **kwargs):
+        result = original_from_trace(trace, **kwargs)
+        explanations.append(result)
+        return result
+
+    monkeypatch.setattr(RoutingExplanation, "from_trace", staticmethod(capture_explanation))
     result = service(primary, fallback, routing_policy=policy).complete(request(), context())
     assert policy.calls == 1
+    assert len(explanations) == 1
+    assert result.routing_explanation is explanations[0]
     assert result.routing_trace is decision.trace
     assert result.routing_trace is result.routing_decision.trace
+    assert result.routing_explanation is not None
+    assert result.routing_explanation.trace is decision.trace
+    assert result.routing_explanation.selection is not None
+    assert result.routing_explanation.selection.reason == result.routing_decision.reason
     assert result.fallback_used is True
     assert result.provider_response.provider_id == fallback.provider_id
     assert result.provider_response.model == "model"

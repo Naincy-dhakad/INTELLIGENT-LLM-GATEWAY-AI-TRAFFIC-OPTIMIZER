@@ -31,6 +31,7 @@ from gateway.domain.routing import (
     RoutingCandidate,
     RoutingDecision,
     RoutingError,
+    RoutingExplanation,
     RoutingRequest,
     RoutingTrace,
 )
@@ -44,6 +45,7 @@ class ChatExecutionResult:
     fallback_used: bool = False
     attempt_count: int = 1
     routing_trace: RoutingTrace | None = None
+    routing_explanation: RoutingExplanation | None = None
 
 
 class ChatService:
@@ -121,6 +123,16 @@ class ChatService:
             decision.policy_version,
         )
         self._emit_routing_success(context.request_id, routing_request, decision)
+        routing_explanation = (
+            RoutingExplanation.from_trace(
+                decision.trace,
+                request=routing_request,
+                classification=classification,
+                decision=decision,
+            )
+            if decision.trace is not None
+            else None
+        )
         primary = self._registry.get(decision.selected_provider_id)
         if primary is None:
             raise LookupError("selected provider is no longer available")
@@ -149,6 +161,7 @@ class ChatService:
                     False,
                     attempt_count,
                     decision.trace,
+                    routing_explanation,
                 )
             except ProviderError as error:
                 last_error = error
@@ -215,6 +228,7 @@ class ChatService:
                             True,
                             attempt_count,
                             decision.trace,
+                            routing_explanation,
                         )
                     except ProviderError as error:
                         last_error = error
