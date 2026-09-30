@@ -15,6 +15,12 @@ from gateway.domain.classification import (
     DeterministicRequestClassifier,
 )
 from gateway.domain.cost import CostMessage, estimate_token_counts
+from gateway.domain.execution import (
+    AttemptExplanation,
+    AttemptOutcome,
+    AttemptRole,
+    ExecutionExplanation,
+)
 from gateway.domain.provider import (
     Capability,
     Provider,
@@ -46,6 +52,7 @@ class ChatExecutionResult:
     attempt_count: int = 1
     routing_trace: RoutingTrace | None = None
     routing_explanation: RoutingExplanation | None = None
+    execution_explanation: ExecutionExplanation | None = None
 
 
 class ChatService:
@@ -139,6 +146,7 @@ class ChatService:
 
         base_request = self._provider_request(request, required_capabilities, decision.selected_model_id, context)
         attempted = {(decision.selected_provider_id, decision.selected_model_id)}
+        execution_attempts: list[AttemptExplanation] = []
         attempt_count = 0
         last_error: ProviderError | None = None
 
@@ -154,6 +162,15 @@ class ChatService:
                     primary, base_request, context, attempt_count,
                     "initial" if attempt_count == 1 else "retry",
                 )
+                execution_attempts.append(
+                    AttemptExplanation(
+                        provider_id=response.provider_id,
+                        model_id=response.model,
+                        attempt_number=attempt_count,
+                        attempt_role=AttemptRole.INITIAL if attempt_count == 1 else AttemptRole.RETRY,
+                        outcome=AttemptOutcome.SUCCESS,
+                    )
+                )
                 return ChatExecutionResult(
                     response,
                     decision,
@@ -162,8 +179,23 @@ class ChatService:
                     attempt_count,
                     decision.trace,
                     routing_explanation,
+                    ExecutionExplanation(
+                        decision.selected_provider_id,
+                        decision.selected_model_id,
+                        tuple(execution_attempts),
+                    ),
                 )
             except ProviderError as error:
+                execution_attempts.append(
+                    AttemptExplanation(
+                        provider_id=primary.metadata.id,
+                        model_id=base_request.model,
+                        attempt_number=attempt_count,
+                        attempt_role=AttemptRole.INITIAL if attempt_count == 1 else AttemptRole.RETRY,
+                        outcome=AttemptOutcome.FAILURE,
+                        error_category=error.category,
+                    )
+                )
                 last_error = error
                 if not RetryPolicy.is_retryable(error.category):
                     raise
@@ -221,6 +253,15 @@ class ChatService:
                             fallback_provider, fallback_request, context,
                             attempt_count, "fallback",
                         )
+                        execution_attempts.append(
+                            AttemptExplanation(
+                                provider_id=response.provider_id,
+                                model_id=response.model,
+                                attempt_number=attempt_count,
+                                attempt_role=AttemptRole.FALLBACK,
+                                outcome=AttemptOutcome.SUCCESS,
+                            )
+                        )
                         return ChatExecutionResult(
                             response,
                             decision,
@@ -229,8 +270,23 @@ class ChatService:
                             attempt_count,
                             decision.trace,
                             routing_explanation,
+                            ExecutionExplanation(
+                                decision.selected_provider_id,
+                                decision.selected_model_id,
+                                tuple(execution_attempts),
+                            ),
                         )
                     except ProviderError as error:
+                        execution_attempts.append(
+                            AttemptExplanation(
+                                provider_id=fallback_provider.metadata.id,
+                                model_id=fallback_request.model,
+                                attempt_number=attempt_count,
+                                attempt_role=AttemptRole.FALLBACK,
+                                outcome=AttemptOutcome.FAILURE,
+                                error_category=error.category,
+                            )
+                        )
                         last_error = error
 
         if last_error is not None:
