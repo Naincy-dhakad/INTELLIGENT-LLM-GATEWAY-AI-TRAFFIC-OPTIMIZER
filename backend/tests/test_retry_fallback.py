@@ -6,6 +6,7 @@ from gateway.api.schemas import ChatRequest
 from gateway.application.chat_service import ChatService
 from gateway.application.chat_service import ChatExecutionResult
 from gateway.application.context import RequestContext
+from gateway.application.safe_routing_explanation import SafeExecutionOutcome, SafeRoutingExplanation
 from gateway.domain.classification import ClassificationResult, ComplexityLevel, RequestCategory
 from gateway.domain.provider import (
     Capability,
@@ -137,6 +138,15 @@ def test_successful_first_attempt_has_no_retry_or_fallback():
     assert result.explainable_routing.routing_explanation is result.routing_explanation
     assert result.explainable_routing.execution_explanation is result.execution_explanation
     assert result.explainable_routing.routing_explanation.trace is decision.trace
+    assert result.safe_routing_explanation is not None
+    assert result.safe_routing_explanation.selected_provider_id == "primary"
+    assert result.safe_routing_explanation.selected_model_id == "model"
+    assert result.safe_routing_explanation.objective == "balanced"
+    assert result.safe_routing_explanation.policy_version == decision.policy_version
+    assert result.safe_routing_explanation.selection_reason == decision.reason
+    assert result.safe_routing_explanation.attempt_count == 1
+    assert result.safe_routing_explanation.fallback_used is False
+    assert result.safe_routing_explanation.execution_outcome is SafeExecutionOutcome.SUCCESS
     assert result.fallback_used is False
     assert result.attempt_count == 1
     assert len(primary.calls) == 1
@@ -206,6 +216,9 @@ def test_retry_preserves_the_same_routing_explanation_and_trace_object(monkeypat
     assert result.explainable_routing.execution_explanation is result.execution_explanation
     assert result.explainable_routing.execution_explanation.initial_provider_id == decision.selected_provider_id
     assert result.explainable_routing.execution_explanation.initial_model_id == decision.selected_model_id
+    assert result.safe_routing_explanation.attempt_count == 2
+    assert result.safe_routing_explanation.fallback_used is False
+    assert result.safe_routing_explanation.execution_outcome is SafeExecutionOutcome.SUCCESS
 
 
 def test_fallback_preserves_the_same_routing_explanation_and_trace_object(monkeypatch):
@@ -245,6 +258,9 @@ def test_fallback_preserves_the_same_routing_explanation_and_trace_object(monkey
     assert result.explainable_routing.routing_explanation is result.routing_explanation
     assert result.explainable_routing.execution_explanation is result.execution_explanation
     assert result.explainable_routing.routing_explanation.trace is decision.trace
+    assert result.safe_routing_explanation.attempt_count == 3
+    assert result.safe_routing_explanation.fallback_used is True
+    assert result.safe_routing_explanation.execution_outcome is SafeExecutionOutcome.SUCCESS
 
 
 def test_retry_exhaustion_keeps_normalized_failure_without_creating_another_route():
@@ -328,6 +344,63 @@ def test_chat_execution_result_keeps_backward_compatible_default():
     )
     assert result.execution_explanation is None
     assert result.explainable_routing is None
+    assert result.safe_routing_explanation is None
+
+
+def test_safe_routing_projection_is_allowlisted_deterministic_and_does_not_mutate_internal_data():
+    primary = FakeProvider("primary", [error(ProviderErrorCategory.UNAVAILABLE), "success"])
+    alternative = FakeProvider("beta")
+    route_request = RoutingRequest(None, None, frozenset({Capability.TEXT_GENERATION}), "balanced")
+    decision = DeterministicRoutingPolicy().route(
+        route_request,
+        tuple(RoutingCandidate.from_metadata(provider.metadata) for provider in (primary, alternative)),
+        default_provider_id="primary",
+    )
+    policy = SpyRoutingPolicy(decision)
+    result = service(primary, alternative, routing_policy=policy).complete(request(), context())
+    internal = result.explainable_routing
+    before = (internal.routing_explanation, internal.execution_explanation)
+
+    projected = SafeRoutingExplanation.from_internal(internal)
+    projected_again = SafeRoutingExplanation.from_internal(internal)
+
+    assert projected == projected_again == result.safe_routing_explanation
+    assert {item.name for item in fields(projected)} == {
+        "selected_provider_id",
+        "selected_model_id",
+        "objective",
+        "selection_reason",
+        "policy_version",
+        "attempt_count",
+        "fallback_used",
+        "execution_outcome",
+    }
+    assert (internal.routing_explanation, internal.execution_explanation) == before
+    assert policy.calls == 1
+    assert any(item.evaluation.provider_id == "beta" for item in internal.routing_explanation.candidates)
+    assert projected.attempt_count == 2
+    assert projected.fallback_used is False
+    assert projected.execution_outcome is SafeExecutionOutcome.SUCCESS
+    with pytest.raises(FrozenInstanceError):
+        projected.fallback_used = True
+
+    forbidden_fields = {
+        "candidates", "alternatives", "trace", "provider_url", "credentials", "api_key",
+        "authorization", "prompt", "completion", "raw_error", "error_category",
+        "historical_spend", "historical_spend_usd", "remaining_budget", "metadata",
+    }
+    assert {item.name for item in fields(projected)}.isdisjoint(forbidden_fields)
+    projection_repr = repr(projected).lower()
+    assert all(
+        sensitive not in projection_repr
+        for sensitive in (
+            "prompt", "completion", "api_key", "authorization", "credential", "url",
+            "principal", "user_id", "raw error", "historical spend", "remaining budget",
+            "metadata", "candidates", "alternatives", "trace",
+        )
+    )
+    assert "safe normalized failure" not in projection_repr
+    assert "beta" not in repr(projected)
 
 
 def test_explicit_provider_prevents_cross_provider_fallback():

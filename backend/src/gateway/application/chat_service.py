@@ -9,6 +9,7 @@ from gateway.application.context import RequestContext
 from gateway.application.observability import EventSink, NoopObservability
 from gateway.application.observability_events import EventType, make_event
 from gateway.application.retry_policy import RetryPolicy
+from gateway.application.safe_routing_explanation import SafeRoutingExplanation
 from gateway.domain.classification import (
     ClassificationMessage,
     ClassificationResult,
@@ -55,6 +56,7 @@ class ChatExecutionResult:
     routing_explanation: RoutingExplanation | None = None
     execution_explanation: ExecutionExplanation | None = None
     explainable_routing: ExplainableRoutingResult | None = None
+    safe_routing_explanation: SafeRoutingExplanation | None = None
 
 
 class ChatService:
@@ -183,6 +185,11 @@ class ChatService:
                     if routing_explanation is not None
                     else None
                 )
+                safe_routing_explanation = (
+                    SafeRoutingExplanation.from_internal(explainable_routing)
+                    if explainable_routing is not None
+                    else None
+                )
                 return ChatExecutionResult(
                     response,
                     decision,
@@ -193,6 +200,7 @@ class ChatService:
                     routing_explanation,
                     execution_explanation,
                     explainable_routing,
+                    safe_routing_explanation,
                 )
             except ProviderError as error:
                 execution_attempts.append(
@@ -281,6 +289,11 @@ class ChatService:
                             if routing_explanation is not None
                             else None
                         )
+                        safe_routing_explanation = (
+                            SafeRoutingExplanation.from_internal(explainable_routing)
+                            if explainable_routing is not None
+                            else None
+                        )
                         return ChatExecutionResult(
                             response,
                             decision,
@@ -291,6 +304,7 @@ class ChatService:
                             routing_explanation,
                             execution_explanation,
                             explainable_routing,
+                            safe_routing_explanation,
                         )
                     except ProviderError as error:
                         execution_attempts.append(

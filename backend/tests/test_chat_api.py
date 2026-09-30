@@ -32,6 +32,7 @@ def test_chat_returns_normalized_phase3_provider_response() -> None:
     assert "routing_trace" not in payload
     assert "execution_explanation" not in payload
     assert "explainable_routing" not in payload
+    assert "safe_routing_explanation" not in payload
     assert response.headers["X-Request-ID"] == payload["request_id"]
 
 
