@@ -20,6 +20,7 @@ from gateway.domain.execution import (
     AttemptOutcome,
     AttemptRole,
     ExecutionExplanation,
+    ExplainableRoutingResult,
 )
 from gateway.domain.provider import (
     Capability,
@@ -53,6 +54,7 @@ class ChatExecutionResult:
     routing_trace: RoutingTrace | None = None
     routing_explanation: RoutingExplanation | None = None
     execution_explanation: ExecutionExplanation | None = None
+    explainable_routing: ExplainableRoutingResult | None = None
 
 
 class ChatService:
@@ -164,12 +166,22 @@ class ChatService:
                 )
                 execution_attempts.append(
                     AttemptExplanation(
-                        provider_id=response.provider_id,
-                        model_id=response.model,
+                        provider_id=primary.metadata.id,
+                        model_id=base_request.model,
                         attempt_number=attempt_count,
                         attempt_role=AttemptRole.INITIAL if attempt_count == 1 else AttemptRole.RETRY,
                         outcome=AttemptOutcome.SUCCESS,
                     )
+                )
+                execution_explanation = ExecutionExplanation(
+                    decision.selected_provider_id,
+                    decision.selected_model_id,
+                    tuple(execution_attempts),
+                )
+                explainable_routing = (
+                    ExplainableRoutingResult(routing_explanation, execution_explanation)
+                    if routing_explanation is not None
+                    else None
                 )
                 return ChatExecutionResult(
                     response,
@@ -179,11 +191,8 @@ class ChatService:
                     attempt_count,
                     decision.trace,
                     routing_explanation,
-                    ExecutionExplanation(
-                        decision.selected_provider_id,
-                        decision.selected_model_id,
-                        tuple(execution_attempts),
-                    ),
+                    execution_explanation,
+                    explainable_routing,
                 )
             except ProviderError as error:
                 execution_attempts.append(
@@ -255,12 +264,22 @@ class ChatService:
                         )
                         execution_attempts.append(
                             AttemptExplanation(
-                                provider_id=response.provider_id,
-                                model_id=response.model,
+                                provider_id=fallback_provider.metadata.id,
+                                model_id=fallback_request.model,
                                 attempt_number=attempt_count,
                                 attempt_role=AttemptRole.FALLBACK,
                                 outcome=AttemptOutcome.SUCCESS,
                             )
+                        )
+                        execution_explanation = ExecutionExplanation(
+                            decision.selected_provider_id,
+                            decision.selected_model_id,
+                            tuple(execution_attempts),
+                        )
+                        explainable_routing = (
+                            ExplainableRoutingResult(routing_explanation, execution_explanation)
+                            if routing_explanation is not None
+                            else None
                         )
                         return ChatExecutionResult(
                             response,
@@ -270,11 +289,8 @@ class ChatService:
                             attempt_count,
                             decision.trace,
                             routing_explanation,
-                            ExecutionExplanation(
-                                decision.selected_provider_id,
-                                decision.selected_model_id,
-                                tuple(execution_attempts),
-                            ),
+                            execution_explanation,
+                            explainable_routing,
                         )
                     except ProviderError as error:
                         execution_attempts.append(

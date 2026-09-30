@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from gateway.domain.provider import ProviderErrorCategory
-from gateway.domain.routing import _check_explanation_identifier, _check_tuple
+from gateway.domain.routing import RoutingExplanation, _check_explanation_identifier, _check_tuple
 
 
 class AttemptRole(StrEnum):
@@ -63,3 +63,23 @@ class ExecutionExplanation:
                 raise ValueError("the initial attempt must match the initial provider and model")
         if any(attempt.attempt_role is AttemptRole.INITIAL for attempt in self.attempts[1:]):
             raise ValueError("only the first attempt may have the initial role")
+
+
+@dataclass(frozen=True)
+class ExplainableRoutingResult:
+    routing_explanation: RoutingExplanation
+    execution_explanation: ExecutionExplanation | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.routing_explanation, RoutingExplanation):
+            raise TypeError("routing_explanation must be a RoutingExplanation")
+        if self.execution_explanation is not None:
+            if not isinstance(self.execution_explanation, ExecutionExplanation):
+                raise TypeError("execution_explanation must be an ExecutionExplanation or None")
+            selection = self.routing_explanation.selection
+            if selection is None:
+                raise ValueError("routing explanation must include a selected candidate")
+            if self.execution_explanation.initial_provider_id != selection.selected.provider_id:
+                raise ValueError("execution initial provider must match the routing selection")
+            if self.execution_explanation.initial_model_id != selection.selected.model_id:
+                raise ValueError("execution initial model must match the routing selection")

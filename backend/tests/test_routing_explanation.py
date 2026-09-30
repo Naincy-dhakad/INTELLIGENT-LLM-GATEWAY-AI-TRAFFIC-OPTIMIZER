@@ -5,6 +5,13 @@ import pytest
 
 from gateway.domain.classification import ClassificationResult, ComplexityLevel, RequestCategory
 from gateway.domain.cost import TokenEstimate
+from gateway.domain.execution import (
+    AttemptExplanation,
+    AttemptOutcome,
+    AttemptRole,
+    ExecutionExplanation,
+    ExplainableRoutingResult,
+)
 from gateway.domain.provider import Capability, HealthStatus, ModelLatency, ModelPricing, ProviderHealth
 from gateway.domain.routing import (
     BudgetExplanation,
@@ -402,6 +409,65 @@ def test_recursive_explanation_representation_excludes_sensitive_request_and_pro
         if sensitive not in {"historical_spend_usd", "remaining_budget"}
     )
     assert decision.reason.lower() in values
+
+
+def test_explainable_routing_result_is_immutable_and_reuses_nested_objects():
+    request = RoutingRequest(None, None, frozenset({Capability.TEXT_GENERATION}), "balanced")
+    decision, routing_explanation = explain(request, (candidate("alpha", "a-model"),))
+    execution_explanation = ExecutionExplanation(
+        "alpha",
+        "a-model",
+        (AttemptExplanation("alpha", "a-model", 1, AttemptRole.INITIAL, AttemptOutcome.SUCCESS),),
+    )
+
+    complete = ExplainableRoutingResult(routing_explanation, execution_explanation)
+
+    assert complete.routing_explanation is routing_explanation
+    assert complete.execution_explanation is execution_explanation
+    assert complete.routing_explanation.trace is decision.trace
+    assert {item.name for item in fields(complete)} == {"routing_explanation", "execution_explanation"}
+    with pytest.raises(FrozenInstanceError):
+        complete.execution_explanation = None
+
+
+@pytest.mark.parametrize(
+    "initial_provider_id, initial_model_id",
+    [("beta", "a-model"), ("alpha", "b-model")],
+)
+def test_explainable_routing_result_rejects_execution_selection_mismatch(initial_provider_id, initial_model_id):
+    request = RoutingRequest(None, None, frozenset({Capability.TEXT_GENERATION}), "balanced")
+    _, routing_explanation = explain(request, (candidate("alpha", "a-model"),))
+    execution_explanation = ExecutionExplanation(initial_provider_id, initial_model_id, ())
+
+    with pytest.raises(ValueError, match="match the routing selection"):
+        ExplainableRoutingResult(routing_explanation, execution_explanation)
+
+
+def test_complete_explanation_recursively_excludes_sensitive_fields_and_values():
+    request = RoutingRequest(None, None, frozenset({Capability.TEXT_GENERATION}), "balanced")
+    _, routing_explanation = explain(request, (candidate("alpha", "a-model"),))
+    execution_explanation = ExecutionExplanation(
+        "alpha",
+        "a-model",
+        (AttemptExplanation("alpha", "a-model", 1, AttemptRole.INITIAL, AttemptOutcome.SUCCESS),),
+    )
+    complete = ExplainableRoutingResult(routing_explanation, execution_explanation)
+    keys, values = recursive_keys_and_values(complete)
+    field_names = {str(value).lower() for value in keys}
+    serialized_values = {str(value).lower() for value in values}
+    forbidden_fields = {
+        "prompt", "prompts", "completion", "completions", "api_key", "authorization",
+        "credentials", "provider_url", "principal_id", "user_id", "raw_provider_error",
+        "raw_error", "metadata", "historical_spend_usd", "remaining_budget",
+    }
+    forbidden_values = {
+        "secret-prompt", "private-completion", "test-api-key", "bearer token",
+        "provider-secret-url", "principal-123", "user-456", "raw provider error",
+        "historical spend amount", "remaining budget amount",
+    }
+
+    assert field_names.isdisjoint(forbidden_fields)
+    assert serialized_values.isdisjoint(forbidden_values)
 
 
 def test_routing_explanation_rejects_incomplete_trace_data():

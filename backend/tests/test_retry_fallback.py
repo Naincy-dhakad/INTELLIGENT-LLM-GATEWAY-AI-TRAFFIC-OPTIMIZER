@@ -133,6 +133,10 @@ def test_successful_first_attempt_has_no_retry_or_fallback():
     assert attempt.error_category is None
     assert result.execution_explanation is not result.routing_explanation
     assert result.routing_decision is decision
+    assert result.explainable_routing is not None
+    assert result.explainable_routing.routing_explanation is result.routing_explanation
+    assert result.explainable_routing.execution_explanation is result.execution_explanation
+    assert result.explainable_routing.routing_explanation.trace is decision.trace
     assert result.fallback_used is False
     assert result.attempt_count == 1
     assert len(primary.calls) == 1
@@ -197,6 +201,11 @@ def test_retry_preserves_the_same_routing_explanation_and_trace_object(monkeypat
         ("primary", "model", 2, AttemptRole.RETRY, AttemptOutcome.SUCCESS, None),
     ]
     assert result.routing_decision is decision
+    assert result.explainable_routing is not None
+    assert result.explainable_routing.routing_explanation is result.routing_explanation
+    assert result.explainable_routing.execution_explanation is result.execution_explanation
+    assert result.explainable_routing.execution_explanation.initial_provider_id == decision.selected_provider_id
+    assert result.explainable_routing.execution_explanation.initial_model_id == decision.selected_model_id
 
 
 def test_fallback_preserves_the_same_routing_explanation_and_trace_object(monkeypatch):
@@ -232,6 +241,10 @@ def test_fallback_preserves_the_same_routing_explanation_and_trace_object(monkey
         ("fallback", "model", 3, AttemptRole.FALLBACK, AttemptOutcome.SUCCESS, None),
     ]
     assert result.routing_decision is decision
+    assert result.explainable_routing is not None
+    assert result.explainable_routing.routing_explanation is result.routing_explanation
+    assert result.explainable_routing.execution_explanation is result.execution_explanation
+    assert result.explainable_routing.routing_explanation.trace is decision.trace
 
 
 def test_retry_exhaustion_keeps_normalized_failure_without_creating_another_route():
@@ -281,9 +294,18 @@ def test_execution_explanation_contains_only_normalized_immutable_attempt_data()
     }
     nested_fields = {
         item.name
-        for value in (execution, *execution.attempts)
+        for value in (
+            result.explainable_routing,
+            result.explainable_routing.routing_explanation,
+            execution,
+            *execution.attempts,
+        )
         for item in fields(value)
     }
+    nested_fields.update(
+        item.name
+        for item in fields(result.explainable_routing.routing_explanation.trace)
+    )
     assert nested_fields.isdisjoint(forbidden_fields)
     assert all("safe normalized failure" not in repr(item) for item in execution.attempts)
     with pytest.raises(FrozenInstanceError):
@@ -305,6 +327,7 @@ def test_chat_execution_result_keeps_backward_compatible_default():
         classification=ClassificationResult(RequestCategory.UNKNOWN, ComplexityLevel.LOW, 0, (), "safe"),
     )
     assert result.execution_explanation is None
+    assert result.explainable_routing is None
 
 
 def test_explicit_provider_prevents_cross_provider_fallback():
